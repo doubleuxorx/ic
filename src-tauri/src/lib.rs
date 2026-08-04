@@ -25,6 +25,9 @@ pub const WORKSPACE_SCHEME: &str = "ic";
 
 /// Streamed in slices so seeking a large video never buffers the whole file.
 const RANGE_CHUNK: u64 = 2 * 1024 * 1024;
+/// Upper bound for untrusted PDFs before PDF.js parsing or a full protocol
+/// response can allocate memory for the document.
+const MAX_PDF_BYTES: u64 = 128 * 1024 * 1024;
 
 /// Origins allowed to read from the `ic://` protocol.
 fn is_allowed_origin(origin: &str) -> bool {
@@ -88,6 +91,9 @@ fn handle_workspace_request<R: tauri::Runtime>(
         return deny(StatusCode::NOT_FOUND);
     };
     let total = metadata.len();
+    if kind == FileKind::Pdf && total > MAX_PDF_BYTES {
+        return deny(StatusCode::PAYLOAD_TOO_LARGE);
+    }
     let mime = mime_for(&resolved.absolute, kind);
 
     let range = request

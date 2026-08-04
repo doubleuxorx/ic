@@ -95,9 +95,28 @@ Covered by `tests/markdown.test.ts`, which asserts against the parsed DOM.
 
 ## PDFs
 
-PDF.js is bundled locally, runs no document scripting, and XFA is disabled.
-Documents are unloaded when a node becomes inactive, which bounds memory. PDFs
-are served through the same validated protocol as other files.
+PDF.js's core API and worker are bundled locally. The application renders pages
+directly to a canvas; it does not instantiate PDF.js's annotation or scripting
+layers, does not ship the QuickJS sandbox assets, and disables XFA rendering.
+PDFs nevertheless remain hostile input to the parser and bundled image/colour
+WASM decoders.
+
+PDFs are served through the same validated protocol as other files and are
+limited to 128 MiB. PDF.js rejects individual images above 16 megapixels and is
+asked to resize oversized image-conversion canvases; the visible page canvas is
+capped at 16 megapixels and 8192 pixels per dimension. Each document owns an
+explicit native worker—fake-worker fallback to the UI thread is not allowed.
+Loading and complete page operations have a 30-second deadline; PDF.js gets a
+short cleanup grace period before the worker is forcibly terminated. A local
+protocol read already in progress may still complete within the 128 MiB file
+limit, and PDF.js may create other internal scratch canvases, so these are risk
+reductions rather than total memory or CPU bounds.
+
+Streaming and automatic pre-fetching are disabled. The Windows HTTP custom
+protocol can use range requests to fetch only required chunks. PDF.js does not
+range-load the non-HTTP `ic://` scheme used on macOS and Linux, so those platforms
+buffer the complete document subject to the 128 MiB limit. These protections do
+not replace prompt PDF.js and webview security updates.
 
 ## External opening
 
@@ -108,7 +127,7 @@ control characters or start with `-`, and must use `https:`, `http:` or
 
 ## Content Security Policy
 
-```
+```text
 default-src 'none';
 script-src 'self' 'wasm-unsafe-eval';
 style-src 'self' 'unsafe-inline';
@@ -122,9 +141,10 @@ base-uri 'none'; form-action 'none'; frame-ancestors 'none'
 ```
 
 No remote origin appears anywhere in it. `'wasm-unsafe-eval'` is required by
-PDF.js image decoders. `'unsafe-inline'` for styles is required by CodeMirror
-and React Flow, which set element styles directly; it grants no script
-execution.
+PDF.js image decoders; unlike `'unsafe-eval'`, it permits WebAssembly compilation
+but not JavaScript evaluation. `'unsafe-inline'` for styles is required by
+CodeMirror and React Flow, which set element styles directly; it grants no
+script execution.
 
 Responses from the `ic://` handler carry `default-src 'none'; sandbox`,
 `X-Content-Type-Options: nosniff`, and an `Access-Control-Allow-Origin` echoed

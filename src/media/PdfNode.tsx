@@ -1,10 +1,10 @@
 /**
- * PDF view, built on a locally bundled PDF.js.
+ * PDF view, built on a locally bundled PDF.js core API and worker.
  *
- * Inactive nodes render a single page thumbnail; the heavier document is only
- * kept while the node is active and is destroyed as soon as it is not, which
- * bounds memory on canvases holding many documents. PDF.js runs no document
- * scripting and XFA forms are off, so a hostile document has no execution path.
+ * This component renders pages directly to a canvas. It does not instantiate
+ * PDF.js's annotation or scripting layers, and XFA rendering is disabled.
+ * Documents still drive the PDF parser and image/colour decoders, so resource
+ * limits below bound some of the work a hostile document can request.
  */
 
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -22,22 +22,64 @@ import { fileUrl } from '@/workspace/workspace-store';
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
 const ASSET_BASE = './pdfjs/';
+const MAX_IMAGE_PIXELS = 16_777_216;
+const MAX_CANVAS_PIXELS = 16_777_216;
+const MAX_CANVAS_DIMENSION = 8192;
+const MAX_PDF_OPERATION_MS = 30_000;
 
-const loadDocument = (relativePath: string) =>
-  pdfjs.getDocument({
+const loadDocument = (relativePath: string) => {
+  // Supply the native worker port ourselves so PDF.js cannot silently fall
+  // back to running a hostile document's parser on the UI thread.
+  const port = new Worker(workerUrl, { type: 'module', name: 'pdfjs' });
+  const worker = pdfjs.PDFWorker.create({ port });
+  const task = pdfjs.getDocument({
     url: fileUrl(relativePath),
+    worker,
     // Locally bundled resources, resolved relative to the application root.
     cMapUrl: `${ASSET_BASE}cmaps/`,
     cMapPacked: true,
     standardFontDataUrl: `${ASSET_BASE}standard_fonts/`,
     iccUrl: `${ASSET_BASE}iccs/`,
     wasmUrl: `${ASSET_BASE}wasm/`,
-    // PDF.js 6 executes no document script and uses no `eval`; XFA forms and
-    // pre-fetching stay off so a document cannot drive extra work.
+    // Reject individual decoded images above 16 megapixels and ask PDF.js to
+    // resize oversized image-conversion canvases before they reach 64 MiB.
+    maxImageSize: MAX_IMAGE_PIXELS,
+    canvasMaxAreaInBytes: MAX_CANVAS_PIXELS * 4,
+    // Range loading remains enabled. Streaming must also be disabled for
+    // disableAutoFetch to prevent PDF.js from continuing to read unused data.
     disableAutoFetch: true,
-    disableStream: false,
+    disableStream: true,
     enableXfa: false,
   });
+  let destroyed = false;
+  const destroy = (urgent = false) => {
+    if (destroyed) return;
+    destroyed = true;
+    // Let PDF.js cancel network/font resources cleanly when the worker responds,
+    // but retain an independent termination path for a stuck parser.
+    const forceTermination = window.setTimeout(
+      () => {
+        port.terminate();
+        worker.destroy();
+      },
+      urgent ? 100 : 1000,
+    );
+    void task
+      .destroy()
+      .catch(() => undefined)
+      .finally(() => {
+        window.clearTimeout(forceTermination);
+        worker.destroy();
+        port.terminate();
+      });
+  };
+  return { task, destroy };
+};
+
+interface DocumentSession {
+  pdf: PDFDocumentProxy;
+  destroy: (urgent?: boolean) => void;
+}
 
 interface Props {
   relativePath: string;
@@ -48,78 +90,157 @@ interface Props {
 
 const PdfNodeComponent = ({ relativePath, active, width, height }: Props) => {
   const canvas = useRef<HTMLCanvasElement | null>(null);
-  const document = useRef<PDFDocumentProxy | null>(null);
-  const renderTask = useRef<{ cancel: () => void } | null>(null);
+  const document = useRef<DocumentSession | null>(null);
+  const renderTask = useRef<{ generation: number; cancel: () => void } | null>(null);
+  const renderGeneration = useRef(0);
   const [pageCount, setPageCount] = useState(0);
   const [page, setPage] = useState(1);
   const [zoom, setZoom] = useState(1);
   const [error, setError] = useState<string | null>(null);
 
   const render = useCallback(
-    async (pdf: PDFDocumentProxy, pageNumber: number, scaleFactor: number) => {
+    async (session: DocumentSession, pageNumber: number, scaleFactor: number) => {
       const target = canvas.current;
       if (!target) return;
-      const pdfPage = await pdf.getPage(Math.min(Math.max(pageNumber, 1), pdf.numPages));
-      const unscaled = pdfPage.getViewport({ scale: 1 });
-      // Fit the width of the node, then apply the user's zoom.
-      const fitScale = Math.max(0.1, (width - 16) / unscaled.width);
-      const viewport = pdfPage.getViewport({ scale: fitScale * scaleFactor });
-
-      const ratio = Math.min(window.devicePixelRatio || 1, 2);
-      target.width = Math.floor(viewport.width * ratio);
-      target.height = Math.floor(viewport.height * ratio);
-      target.style.width = `${Math.floor(viewport.width)}px`;
-      target.style.height = `${Math.floor(viewport.height)}px`;
-
-      const context = target.getContext('2d');
-      if (!context) return;
-      renderTask.current?.cancel();
-      const task = pdfPage.render({
-        canvas: target,
-        canvasContext: context,
-        viewport,
-        transform: ratio === 1 ? undefined : [ratio, 0, 0, ratio, 0, 0],
-      });
-      renderTask.current = task;
-      await task.promise.catch(() => undefined);
+      const generation = ++renderGeneration.current;
+      const previousTask = renderTask.current;
       renderTask.current = null;
+      previousTask?.cancel();
+      let timedOut = false;
+      const timeout = window.setTimeout(() => {
+        if (renderGeneration.current !== generation) return;
+        timedOut = true;
+        const currentTask = renderTask.current;
+        if (currentTask?.generation === generation) {
+          renderTask.current = null;
+          currentTask.cancel();
+        }
+        session.destroy(true);
+      }, MAX_PDF_OPERATION_MS);
+
+      try {
+        const pdfPage = await session.pdf.getPage(
+          Math.min(Math.max(pageNumber, 1), session.pdf.numPages),
+        );
+        if (renderGeneration.current !== generation) return;
+        if (timedOut) throw new Error('PDF page rendering timed out');
+        const unscaled = pdfPage.getViewport({ scale: 1 });
+        if (
+          !Number.isFinite(unscaled.width) ||
+          !Number.isFinite(unscaled.height) ||
+          unscaled.width <= 0 ||
+          unscaled.height <= 0
+        ) {
+          throw new Error('PDF page has invalid dimensions');
+        }
+
+        // Fit the width of the node, then apply the user's zoom. Clamp both the
+        // backing-store dimensions and total pixels before allocating a canvas.
+        const fitScale = Math.max(0.1, (Math.max(width, 17) - 16) / unscaled.width);
+        const requestedScale = fitScale * scaleFactor;
+        const requestedWidth = unscaled.width * requestedScale;
+        const requestedHeight = unscaled.height * requestedScale;
+        const ratio = Math.min(Math.max(window.devicePixelRatio || 1, 1), 2);
+        const dimensionScale = Math.min(
+          1,
+          MAX_CANVAS_DIMENSION / (Math.max(requestedWidth, requestedHeight) * ratio),
+        );
+        const requestedPixels = requestedWidth * requestedHeight * ratio * ratio;
+        const areaScale =
+          requestedPixels > MAX_CANVAS_PIXELS ? Math.sqrt(MAX_CANVAS_PIXELS / requestedPixels) : 1;
+        const viewport = pdfPage.getViewport({
+          scale: requestedScale * Math.min(dimensionScale, areaScale),
+        });
+
+        target.width = Math.max(1, Math.floor(viewport.width * ratio));
+        target.height = Math.max(1, Math.floor(viewport.height * ratio));
+        target.style.width = `${Math.max(1, Math.floor(viewport.width))}px`;
+        target.style.height = `${Math.max(1, Math.floor(viewport.height))}px`;
+
+        const context = target.getContext('2d');
+        if (!context) return;
+        if (renderGeneration.current !== generation) return;
+        const task = pdfPage.render({
+          canvas: target,
+          canvasContext: context,
+          viewport,
+          transform: ratio === 1 ? undefined : [ratio, 0, 0, ratio, 0, 0],
+        });
+        renderTask.current = { generation, cancel: () => task.cancel() };
+        await task.promise;
+      } catch (renderError) {
+        // Cancellation and stale failures are expected when the page, zoom,
+        // path, or activation state changes.
+        if (renderGeneration.current !== generation) return;
+        if (timedOut) throw new Error('PDF page rendering timed out');
+        throw renderError;
+      } finally {
+        window.clearTimeout(timeout);
+        if (renderTask.current?.generation === generation) renderTask.current = null;
+      }
     },
     [width],
   );
 
   useEffect(() => {
     let cancelled = false;
-    const task = loadDocument(relativePath);
+    let timedOut = false;
+    setError(null);
+    let loaded: ReturnType<typeof loadDocument>;
+    try {
+      loaded = loadDocument(relativePath);
+    } catch (loadError) {
+      setError(`PDF worker could not start: ${errorMessage(loadError)}`);
+      return;
+    }
+    const { task, destroy } = loaded;
+    const timeout = window.setTimeout(() => {
+      if (cancelled) return;
+      timedOut = true;
+      setError('PDF loading timed out');
+      destroy(true);
+    }, MAX_PDF_OPERATION_MS);
     task.promise
       .then(async (pdf) => {
-        if (cancelled) {
-          void task.destroy();
+        window.clearTimeout(timeout);
+        if (cancelled || timedOut) {
+          destroy();
           return;
         }
-        document.current = pdf;
+        const session = { pdf, destroy };
+        document.current = session;
         setPageCount(pdf.numPages);
-        await render(pdf, page, active ? zoom : 1);
+        await render(session, page, active ? zoom : 1);
       })
       .catch((loadError) => {
-        if (!cancelled) setError(errorMessage(loadError));
-      });
+        if (!cancelled && !timedOut) setError(errorMessage(loadError));
+      })
+      .finally(() => window.clearTimeout(timeout));
 
     return () => {
       cancelled = true;
-      renderTask.current?.cancel();
-      // Destroying the loading task unloads the document and its worker data,
-      // which is what bounds memory on canvases holding many PDFs.
+      window.clearTimeout(timeout);
+      renderGeneration.current += 1;
+      const currentTask = renderTask.current;
+      renderTask.current = null;
+      currentTask?.cancel();
+      // Release the current document and worker data before loading a
+      // replacement or unmounting the node.
       document.current = null;
-      void task.destroy();
+      destroy();
     };
-    // Re-loading on activation is intentional: the document is unloaded when
-    // the node goes inactive.
+    // Activation changes the initial zoom, so replace the previous task and
+    // render again with the state-specific scale.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [relativePath, active]);
 
   useEffect(() => {
-    const pdf = document.current;
-    if (pdf) void render(pdf, page, zoom);
+    const session = document.current;
+    if (session) {
+      void render(session, page, zoom).catch((renderError) => {
+        if (document.current === session) setError(errorMessage(renderError));
+      });
+    }
   }, [page, zoom, render, height]);
 
   if (error) {
