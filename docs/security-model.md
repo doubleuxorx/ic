@@ -1,0 +1,150 @@
+# Security model
+
+Security is the first priority in this project, ahead of simplicity,
+extensibility and performance.
+
+## Threat model
+
+Assumed hostile:
+
+- Every file in a workspace: Markdown, canvases, PDFs, images, audio and video
+  may be crafted by an attacker and arrive by download, sync or shared drive.
+- Every path, URL and identifier that reaches a Rust command from the webview.
+
+Assumed trusted:
+
+- The user, the operating system, and the directory the user explicitly chose.
+- The application's own bundled code.
+
+Out of scope: a compromised operating system, an attacker with write access to
+the installed application, and physical access.
+
+## Invariants
+
+1. **Opening a workspace or canvas never executes anything.** There is no
+   scripting engine, no plugin loader, no program node and no shell access.
+2. **No network.** The application makes no outbound requests. Every asset —
+   PDF.js and its worker, character maps, standard fonts, WASM decoders, fonts,
+   styles — is bundled locally. Remote images referenced from Markdown are
+   dropped rather than fetched.
+3. **The webview has no general filesystem access.** No `fs`, `shell`, `http`
+   or `process` plugin is enabled. The capability file grants only core events
+   and the native file picker.
+4. **Every command validates its own arguments**, regardless of what the
+   runtime authority already checked.
+
+## Path handling
+
+`src-tauri/src/security/paths.rs` is the only place relative paths are resolved.
+
+- Absolute paths, drive prefixes, `..` components, `:` in a component and NUL
+  bytes are rejected before touching the filesystem.
+- Both `/` and `\` are treated as separators on every platform, so a
+  Windows-style path cannot smuggle a component past the checks.
+- Existing paths are canonicalized, which resolves symlinks, and the result must
+  be inside the workspace root. Paths that do not exist yet are checked against
+  their nearest existing parent, so new files can be created without weakening
+  the check.
+- **Symlink policy:** a link resolving outside the workspace is refused. The
+  user can authorize a specific external target through
+  `workspace_authorize_external`; authorizations are stored in workspace
+  settings and re-checked on every access. Directory listings never descend
+  through symlinks at all.
+
+Covered by tests in `paths.rs`, including a file symlink and a directory
+symlink escaping the workspace.
+
+## File type handling
+
+Extensions decide what is *offered*; content decides how a file is *rendered*
+(`security/kinds.rs`). A `.png` containing a PDF is treated as a PDF, and a file
+whose magic bytes match nothing renderable is refused rather than handed to a
+viewer. The `ic://` handler applies the same check before serving bytes.
+
+## Writing files
+
+`persistence/` never truncates a file in place:
+
+1. Write to a temporary file in the same directory.
+2. Flush and `fsync`.
+3. Rename over the target.
+4. `fsync` the directory so the rename itself is durable.
+
+If the rename fails, the temporary file is left behind and the previous version
+of the target is untouched, so content is always recoverable.
+
+Every write carries the revision (SHA-256 of the bytes) the caller last saw. A
+mismatch means the file changed externally: the write is refused and the
+conflict is surfaced with both versions, never silently resolved. Text documents
+are capped at 16 MiB so a hostile file cannot exhaust memory through IPC.
+
+## Markdown
+
+- The parser runs with raw HTML disabled.
+- Output is sanitized again with DOMPurify against an explicit tag and attribute
+  allowlist; `script`, `style`, `iframe`, `object`, `embed`, `form`, `input`,
+  `svg` and `math` are removed, along with `style` and every event-handler
+  attribute.
+- Links are rendered **inert**: the `href` is moved to `data-href`, so a click
+  cannot navigate the webview. Opening one requires a confirmation dialog that
+  shows the full URL, and only `https:`, `http:` and `mailto:` are accepted.
+- Relative images resolve to workspace files through `ic://`; remote and `data:`
+  images are dropped.
+
+Covered by `tests/markdown.test.ts`, which asserts against the parsed DOM.
+
+## PDFs
+
+PDF.js is bundled locally, runs no document scripting, and XFA is disabled.
+Documents are unloaded when a node becomes inactive, which bounds memory. PDFs
+are served through the same validated protocol as other files.
+
+## External opening
+
+`commands/external.rs` never invokes a shell. The platform opener is executed
+directly with one argument. URLs are length-limited, rejected if they contain
+control characters or start with `-`, and must use `https:`, `http:` or
+`mailto:`. Paths must resolve inside the workspace.
+
+## Content Security Policy
+
+```
+default-src 'none';
+script-src 'self' 'wasm-unsafe-eval';
+style-src 'self' 'unsafe-inline';
+img-src 'self' ic: http://ic.localhost data: blob:;
+media-src 'self' ic: http://ic.localhost blob:;
+font-src 'self' data:;
+connect-src 'self' ic: http://ic.localhost ipc: http://ipc.localhost;
+worker-src 'self' blob:;
+object-src 'none'; frame-src 'none';
+base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+```
+
+No remote origin appears anywhere in it. `'wasm-unsafe-eval'` is required by
+PDF.js image decoders. `'unsafe-inline'` for styles is required by CodeMirror
+and React Flow, which set element styles directly; it grants no script
+execution.
+
+Responses from the `ic://` handler carry `default-src 'none'; sandbox`,
+`X-Content-Type-Options: nosniff`, and an `Access-Control-Allow-Origin` echoed
+only for the application's own origins.
+
+## Known trade-off: `freezePrototype`
+
+Tauri's `freezePrototype` hardening is **off**. It freezes `Object.prototype`,
+which breaks `d3-color` — a transitive dependency of React Flow — at import
+time (`prototype.constructor = constructor` throws), leaving a blank window.
+
+This is acceptable here because prototype pollution needs attacker-controlled
+JavaScript, and there is no path to executing any: no remote scripts, no `eval`,
+a strict CSP, sanitized Markdown, no plugin runtime and no scripting engine.
+Revisit if a dependency ever gains a JS execution surface.
+
+## Operational rules
+
+- Do not run the application as administrator or root.
+- Native libraries are never loaded from a workspace.
+- Dependency auditing runs in CI (`.github/workflows/ci.yml`): `cargo audit` for
+  Rust and `yarn npm audit` for JavaScript.
+- Release builds ship no source maps and no debug assets.

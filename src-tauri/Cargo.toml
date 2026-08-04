@@ -1,0 +1,51 @@
+[package]
+name = "ic"
+version = "0.4.0"
+description = "Offline-first infinite canvas knowledge application"
+authors = ["ic contributors"]
+edition = "2021"
+rust-version = "1.77"
+license = "MIT"
+
+[lib]
+name = "ic_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+thiserror = "2"
+notify = "8"
+notify-debouncer-full = "0.6"
+image = { version = "0.25", default-features = false, features = [
+    "png",
+    "jpeg",
+    "webp",
+    "gif",
+    "bmp",
+] }
+percent-encoding = "2"
+sha2 = "0.10"
+infer = "0.19"
+urlencoding = "2"
+
+[features]
+# Selects the embedded frontend instead of a dev server. The Tauri CLI enables
+# it for `tauri build`; do not remove.
+custom-protocol = ["tauri/custom-protocol"]
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
+incremental = false

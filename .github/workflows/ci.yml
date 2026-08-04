@@ -1,0 +1,140 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # WebKitGTK and its build dependencies are only needed on Linux.
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev \
+            patchelf libssl-dev
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Bundle PDF.js assets
+        run: node scripts/prepare-assets.mjs
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Frontend tests
+        run: npx vitest run
+
+      - name: Frontend build
+        run: npx vite build
+
+      - name: Rust format
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+
+      - name: Rust lint
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+      - name: Rust tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+  audit:
+    name: dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Audit JavaScript dependencies
+        run: yarn npm audit --severity moderate || yarn audit --level moderate
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Audit Rust dependencies
+        run: cargo audit --file src-tauri/Cargo.lock
+
+  package:
+    name: package (${{ matrix.os }})
+    needs: check
+    if: github.event_name == 'push'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev \
+            patchelf libssl-dev
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Bundle PDF.js assets
+        run: node scripts/prepare-assets.mjs
+
+      - name: Build installers
+        run: npx tauri build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ic-${{ matrix.os }}
+          path: |
+            src-tauri/target/release/bundle/**/*
+          if-no-files-found: warn

@@ -1,0 +1,14 @@
+{
+	"nodes":[
+		{"id":"a1b2c3d4e5f60001","x":-460,"y":-260,"width":400,"height":400,"type":"file","file":"Notes/Example.md"},
+		{"id":"a1b2c3d4e5f60002","x":40,"y":-260,"width":400,"height":180,"type":"text","text":"# Heading\n\nSome **markdown** with a [link](https://example.org).","color":"4"},
+		{"id":"a1b2c3d4e5f60003","x":40,"y":-20,"width":400,"height":160,"type":"link","url":"https://jsoncanvas.org/spec/1.0/"},
+		{"id":"a1b2c3d4e5f60004","x":-520,"y":-360,"width":1040,"height":620,"type":"group","label":"Research","color":"#7b3fbf","backgroundStyle":"cover"},
+		{"id":"a1b2c3d4e5f60005","x":-460,"y":200,"width":300,"height":240,"type":"file","file":"Attachments/image.png","unknownVendorField":{"kept":true}}
+	],
+	"edges":[
+		{"id":"e1b2c3d4e5f60001","fromNode":"a1b2c3d4e5f60001","fromSide":"right","toNode":"a1b2c3d4e5f60002","toSide":"left","label":"describes","color":"2"},
+		{"id":"e1b2c3d4e5f60002","fromNode":"a1b2c3d4e5f60002","fromSide":"bottom","fromEnd":"arrow","toNode":"a1b2c3d4e5f60003","toSide":"top","toEnd":"none"}
+	],
+	"vendorMetadata":{"preserved":"yes"}
+}

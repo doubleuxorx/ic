@@ -1,0 +1,913 @@
+/*
+ * Theme system.
+ *
+ * Every colour used anywhere in the application is defined here as a custom
+ * property. Components never hard-code colours. Light is white, dark is true
+ * black; secondary dark surfaces lift slightly for hierarchy.
+ */
+
+:root {
+  --app-background: #ffffff;
+  --canvas-background: #ffffff;
+  --text-primary: #000000;
+  --text-secondary: #4a4a4a;
+  --text-muted: #767676;
+
+  --surface: #ffffff;
+  --surface-raised: #f7f7f7;
+  --surface-sunken: #f0f0f0;
+  --border: #d4d4d4;
+  --border-strong: #a0a0a0;
+  --accent: #2b5fd9;
+  --accent-contrast: #ffffff;
+  --danger: #b3261e;
+
+  --dot-grid: #d8d8d8;
+  --edge: #6b6b6b;
+  --edge-selected: var(--accent);
+  --selection-outline: var(--accent);
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+
+  --canvas-color-1: #c0392b;
+  --canvas-color-2: #cb6b1f;
+  --canvas-color-3: #b8960a;
+  --canvas-color-4: #2f8a3b;
+  --canvas-color-5: #1a7f8e;
+  --canvas-color-6: #7b3fbf;
+
+  --node-radius: 6px;
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  --font-size-ui: 13px;
+}
+
+:root[data-theme="dark"] {
+  --app-background: #000000;
+  --canvas-background: #000000;
+  --text-primary: #ffffff;
+  --text-secondary: #c9c9c9;
+  --text-muted: #8f8f8f;
+
+  --surface: #0b0b0b;
+  --surface-raised: #141414;
+  --surface-sunken: #060606;
+  --border: #2e2e2e;
+  --border-strong: #575757;
+  --accent: #7aa2ff;
+  --accent-contrast: #000000;
+  --danger: #ff8a80;
+
+  --dot-grid: #2a2a2a;
+  --edge: #9a9a9a;
+  --shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
+
+  --canvas-color-1: #ff6b5e;
+  --canvas-color-2: #ffa14a;
+  --canvas-color-3: #ffd54a;
+  --canvas-color-4: #5ed67a;
+  --canvas-color-5: #4ad6e6;
+  --canvas-color-6: #b78bff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--app-background);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-ui);
+  overflow: hidden;
+  /* The window is the canvas: no text selection outside editors. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 5px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ---------------------------------------------------------------- canvas */
+
+.app {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: var(--app-background);
+}
+
+.react-flow {
+  background: var(--canvas-background);
+}
+
+.react-flow__background-pattern {
+  color: var(--dot-grid);
+}
+
+.react-flow__attribution {
+  display: none;
+}
+
+.react-flow__panel {
+  margin: 0;
+}
+
+.react-flow__node {
+  font-family: var(--font-ui);
+  font-size: var(--font-size-ui);
+  color: var(--text-primary);
+}
+
+.react-flow__handle {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1.5px solid var(--border-strong);
+  opacity: 0;
+  transition: opacity 90ms ease-out, transform 90ms ease-out;
+  pointer-events: none;
+}
+
+/* The connection dot appears centred on each edge, on hover only. */
+.node:hover .react-flow__handle,
+.react-flow__node.selected .react-flow__handle,
+.react-flow.connecting .react-flow__handle {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.react-flow__handle:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  transform: scale(1.35);
+}
+
+.react-flow__handle-top {
+  top: -5px;
+}
+.react-flow__handle-bottom {
+  bottom: -5px;
+}
+.react-flow__handle-left {
+  left: -5px;
+}
+.react-flow__handle-right {
+  right: -5px;
+}
+
+.react-flow__edge-path {
+  stroke: var(--edge);
+  stroke-width: 1.75;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--edge-selected);
+  stroke-width: 2.5;
+}
+
+.react-flow__connection-path {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.edge-label {
+  position: absolute;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-size: 11px;
+  pointer-events: all;
+  white-space: nowrap;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.edge-label.editing {
+  padding: 0;
+  border-color: var(--accent);
+}
+
+.edge-label input {
+  border: none;
+  background: var(--surface);
+  color: var(--text-primary);
+  font: inherit;
+  padding: 1px 6px;
+  min-width: 80px;
+  outline: none;
+}
+
+.react-flow__minimap {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.react-flow__minimap-mask {
+  fill: color-mix(in srgb, var(--app-background) 70%, transparent);
+}
+
+/* ----------------------------------------------------------------- nodes */
+
+.node {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--node-radius);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: border-color 90ms ease-out;
+}
+
+.node.colored {
+  border-color: var(--node-color);
+  border-left-width: 4px;
+}
+
+.react-flow__node.selected .node {
+  border-color: var(--selection-outline);
+  box-shadow: 0 0 0 1px var(--selection-outline);
+}
+
+.node.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.node-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-raised);
+  flex: 0 0 auto;
+  min-height: 24px;
+}
+
+.node-header .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.node-body.scroll {
+  overflow: auto;
+}
+
+.node-actions {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 90ms ease-out;
+  z-index: 5;
+}
+
+/* Buttons exist only while the pointer is on the node. */
+.node:hover .node-actions,
+.node.active .node-actions {
+  opacity: 1;
+}
+
+.icon-button {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+}
+
+.icon-button:hover {
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.icon-button svg {
+  width: 13px;
+  height: 13px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.placeholder {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+  padding: 8px;
+}
+
+/* group */
+
+.node.group {
+  background: color-mix(in srgb, var(--group-color, var(--border)) 8%, transparent);
+  border: 1.5px dashed var(--group-color, var(--border-strong));
+  border-radius: 10px;
+}
+
+.node.group .group-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--surface);
+  border-bottom-right-radius: 8px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  max-width: 80%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node.group .group-label input {
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font: inherit;
+  outline: none;
+  width: 100%;
+}
+
+/* text and markdown */
+
+.markdown {
+  padding: 10px 12px;
+  overflow: auto;
+  height: 100%;
+  line-height: 1.5;
+  user-select: text;
+  -webkit-user-select: text;
+  overflow-wrap: anywhere;
+}
+
+.markdown > :first-child {
+  margin-top: 0;
+}
+
+.markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown h1 {
+  font-size: 1.5em;
+}
+.markdown h2 {
+  font-size: 1.3em;
+}
+.markdown h3 {
+  font-size: 1.15em;
+}
+
+.markdown code {
+  font-family: var(--font-mono);
+  background: var(--surface-sunken);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+.markdown pre {
+  background: var(--surface-sunken);
+  padding: 8px 10px;
+  border-radius: 4px;
+  overflow: auto;
+}
+
+.markdown pre code {
+  background: none;
+  padding: 0;
+}
+
+.markdown blockquote {
+  margin: 0.5em 0;
+  padding-left: 10px;
+  border-left: 3px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.markdown table {
+  border-collapse: collapse;
+}
+
+.markdown th,
+.markdown td {
+  border: 1px solid var(--border);
+  padding: 3px 6px;
+}
+
+.markdown hr {
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
+.markdown img {
+  max-width: 100%;
+}
+
+/* Links are inert until deliberately activated. */
+.markdown .md-link {
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.plain-text {
+  padding: 10px 12px;
+  height: 100%;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+  -webkit-user-select: text;
+  display: flex;
+  align-items: center;
+}
+
+.plain-text.title {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* ---------------------------------------------------------------- editor */
+
+.editor-host {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Resize controls belong to the same hover-only vocabulary as the handles. */
+.react-flow__resize-control.handle {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--surface);
+  border: 1.5px solid var(--accent);
+}
+
+.react-flow__resize-control.line {
+  border-color: var(--accent);
+  border-width: 1px;
+}
+
+.cm-editor {
+  height: 100%;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.cm-editor .cm-scroller {
+  font-family: var(--font-mono);
+  line-height: 1.55;
+}
+
+.cm-editor .cm-content {
+  caret-color: var(--text-primary);
+}
+
+.cm-editor .cm-gutters {
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  border-right: 1px solid var(--border);
+}
+
+.cm-editor .cm-activeLine {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.cm-editor .cm-selectionBackground,
+.cm-editor.cm-focused .cm-selectionBackground,
+.cm-editor ::selection {
+  background: color-mix(in srgb, var(--accent) 30%, transparent) !important;
+}
+
+.cm-editor.cm-focused {
+  outline: none;
+}
+
+/* Vi normal mode uses a block cursor. */
+.cm-editor.vi-normal .cm-cursor {
+  border-left-width: 0.6em;
+  border-left-color: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+.vi-indicator {
+  position: absolute;
+  /* CodeMirror's wrapper is positioned and comes later in the document, so the
+     indicator needs to be lifted above it explicitly. */
+  z-index: 1;
+  right: 6px;
+  bottom: 4px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 4px;
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------------ media */
+
+.media-fill {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  background: var(--surface-sunken);
+}
+
+.media-fill.fit {
+  object-fit: contain;
+}
+.media-fill.fill {
+  object-fit: cover;
+}
+.media-fill.original {
+  object-fit: none;
+  object-position: center;
+}
+
+.media-controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  border-top: 1px solid var(--border);
+  opacity: 0;
+  transition: opacity 90ms ease-out;
+}
+
+.node:hover .media-controls,
+.node.active .media-controls {
+  opacity: 1;
+}
+
+.media-controls input[type="range"] {
+  flex: 1 1 auto;
+  accent-color: var(--accent);
+  min-width: 40px;
+}
+
+.media-controls .time {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.pdf-canvas {
+  display: block;
+  margin: 0 auto;
+  background: #ffffff;
+  box-shadow: var(--shadow);
+}
+
+.pdf-page-strip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 3px 6px;
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  border-top: 1px solid var(--border);
+  opacity: 0;
+  transition: opacity 90ms ease-out;
+}
+
+.node:hover .pdf-page-strip,
+.node.active .pdf-page-strip {
+  opacity: 1;
+}
+
+/* --------------------------------------------------------------- overlays */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--app-background) 55%, transparent);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+  z-index: 100;
+}
+
+.palette {
+  width: min(680px, 92vw);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.palette input {
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 15px;
+  padding: 12px 14px;
+  outline: none;
+}
+
+.palette-list {
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.palette-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+
+.palette-item[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.palette-item.active {
+  background: var(--surface-sunken);
+}
+
+.palette-item .category {
+  color: var(--text-muted);
+  font-size: 11px;
+  min-width: 74px;
+}
+
+.palette-item .title {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-item .shortcut {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.palette-empty {
+  padding: 16px 14px;
+  color: var(--text-muted);
+}
+
+.dialog {
+  width: min(560px, 92vw);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dialog h2 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.dialog p {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.dialog input {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+  font: inherit;
+  padding: 8px 10px;
+  outline: none;
+}
+
+.dialog input:focus {
+  border-color: var(--accent);
+}
+
+.dialog .row {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.dialog button {
+  font: inherit;
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.dialog button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.color-grid {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.color-swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  cursor: pointer;
+  padding: 0;
+}
+
+.color-swatch.none {
+  background:
+    linear-gradient(to bottom right, transparent 45%, var(--danger) 45%, var(--danger) 55%, transparent 55%),
+    var(--surface);
+}
+
+/* --------------------------------------------------------------- chrome */
+
+.hint {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 10px;
+  text-align: center;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.hint kbd {
+  font-family: var(--font-mono);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: var(--text-secondary);
+}
+
+.status-bar {
+  position: absolute;
+  left: 8px;
+  bottom: 6px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 11px;
+  pointer-events: none;
+  opacity: 0.55;
+  transition: opacity 120ms ease-out;
+  z-index: 10;
+}
+
+.app:hover .status-bar {
+  opacity: 1;
+}
+
+.status-bar .dirty {
+  color: var(--accent);
+}
+
+.toast {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 8px 12px;
+  box-shadow: var(--shadow);
+  z-index: 60;
+  max-width: 70vw;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.toast.error {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.file-list {
+  overflow-y: auto;
+  max-height: 46vh;
+}
+
+.file-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+.file-row.active {
+  background: var(--surface-sunken);
+}
+
+.file-row .path {
+  color: var(--text-muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-row .kind {
+  color: var(--text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
