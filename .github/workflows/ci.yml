@@ -138,3 +138,34 @@ jobs:
           path: |
             src-tauri/target/release/bundle/**/*
           if-no-files-found: warn
+
+  package-alpine-appimage:
+    name: package (alpine-musl-x86_64 AppImage)
+    needs: check
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # GitHub has no hosted Alpine runner. Build in a native x86_64 Alpine
+      # container on the hosted Ubuntu runner instead.
+      - name: Build Alpine AppImage builder
+        run: |
+          docker build --pull --platform linux/amd64 \
+            --file .github/alpine-appimage.Dockerfile \
+            --tag ic-alpine-appimage-builder .
+
+      - name: Build musl x86_64 AppImage
+        run: |
+          docker run --rm --platform linux/amd64 \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --workdir /workspace \
+            ic-alpine-appimage-builder
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ic-alpine-musl-x86_64
+          path: src-tauri/target/release/bundle/appimage-musl/*.AppImage
+          if-no-files-found: error
