@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.ic.canvas</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>ic</name>
+  <summary>Offline-first infinite canvas</summary>
+  <developer id="io.github.doubleuxorx">
+    <name>ic contributors</name>
+  </developer>
+  <description>
+    <p>
+      Arrange and edit Markdown, documents and media on an infinite canvas.
+      Workspaces remain ordinary local files and canvases use the portable JSON
+      Canvas format.
+    </p>
+    <p>
+      ic has no accounts, telemetry, plugins or network access. Opening a
+      workspace never executes its contents.
+    </p>
+  </description>
+  <launchable type="desktop-id">org.ic.canvas.desktop</launchable>
+  <url type="homepage">https://github.com/doubleuxorx/ic</url>
+  <url type="vcs-browser">https://github.com/doubleuxorx/ic</url>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="0.4.0" date="2026-03-13" />
+  </releases>
+</component>

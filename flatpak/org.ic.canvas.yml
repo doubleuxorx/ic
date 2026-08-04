@@ -1,0 +1,58 @@
+app-id: org.ic.canvas
+runtime: org.gnome.Platform
+runtime-version: "48"
+sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.node22
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: ic
+
+finish-args:
+  # The app is offline; deliberately do not grant --share=network.
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --socket=pulseaudio
+  - --device=dri
+  # Workspaces are directories that the Rust backend watches and edits directly.
+  - --filesystem=home
+
+modules:
+  - name: ic
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/node22/bin:/usr/lib/sdk/rust-stable/bin
+      env:
+        HOME: /run/build/ic
+        YARN_CACHE_FOLDER: /run/build/ic/.yarn-cache
+        CARGO_HOME: /run/build/ic/cargo
+        CARGO_NET_OFFLINE: "true"
+    build-commands:
+      - printf 'yarn-offline-mirror "%s"\n' "$FLATPAK_BUILDER_BUILDDIR/flatpak-node/yarn-mirror" > .yarnrc
+      - yarn install --offline --frozen-lockfile --non-interactive
+      - yarn build
+      - cargo fetch --locked --offline --manifest-path src-tauri/Cargo.toml
+      - cargo build --locked --offline --release --manifest-path src-tauri/Cargo.toml --features custom-protocol --bin ic
+      - install -Dm755 src-tauri/target/release/ic "$FLATPAK_DEST/bin/ic"
+      - install -Dm644 flatpak/org.ic.canvas.desktop "$FLATPAK_DEST/share/applications/org.ic.canvas.desktop"
+      - install -Dm644 flatpak/org.ic.canvas.metainfo.xml "$FLATPAK_DEST/share/metainfo/org.ic.canvas.metainfo.xml"
+      - install -Dm644 src-tauri/icons/32x32.png "$FLATPAK_DEST/share/icons/hicolor/32x32/apps/org.ic.canvas.png"
+      - install -Dm644 src-tauri/icons/128x128.png "$FLATPAK_DEST/share/icons/hicolor/128x128/apps/org.ic.canvas.png"
+      - install -Dm644 src-tauri/icons/128x128@2x.png "$FLATPAK_DEST/share/icons/hicolor/256x256/apps/org.ic.canvas.png"
+      - install -Dm644 src-tauri/icons/icon.png "$FLATPAK_DEST/share/icons/hicolor/512x512/apps/org.ic.canvas.png"
+    sources:
+      - type: dir
+        path: ..
+        skip:
+          - .git
+          - .github
+          - .pi*
+          - .flatpak-build.*
+          - .flatpak-builder
+          - build-flatpak
+          - dist
+          - node_modules
+          - public/pdfjs
+          - src-tauri/target
+      - cargo-sources.json
+      - node-sources.json

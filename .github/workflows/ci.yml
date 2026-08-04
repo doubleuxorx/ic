@@ -169,3 +169,24 @@ jobs:
           name: ic-alpine-musl-x86_64
           path: src-tauri/target/release/bundle/appimage-musl/*.AppImage
           if-no-files-found: error
+
+  flatpak:
+    name: package (Flatpak x86_64)
+    needs: check
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-48
+      options: --privileged
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Flatpak
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: ic.flatpak
+          manifest-path: flatpak/org.ic.canvas.yml
+          artifact-name: ic-flatpak-x86_64
+          cache-key: flatpak-${{ hashFiles('flatpak/org.ic.canvas.yml', 'flatpak/*-sources.json', 'yarn.lock', 'src-tauri/Cargo.lock') }}

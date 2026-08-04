@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=ic
+Comment=Arrange Markdown, documents and media on an infinite canvas
+Exec=ic
+Icon=org.ic.canvas
+Terminal=false
+Categories=Office;
+Keywords=canvas;markdown;notes;documents;knowledge;
