@@ -1,29 +1,16 @@
-# Dependencies
 node_modules/
-
-# Build output
 dist/
 src-tauri/target/
-
-# Generated at build or setup time, never edited by hand
 src-tauri/gen/
 public/pdfjs/
 fixtures/performance/
 *.tsbuildinfo
-
-# Workspace data, should a workspace ever be opened inside the checkout
 .app/
-
-# Local environment and editors
 .env
 .env.*
 .vscode/
 .idea/
+.pi*/
 .DS_Store
 Thumbs.db
-
-# Logs
 *.log
-
-# Personal notes, kept locally
-USER.md
