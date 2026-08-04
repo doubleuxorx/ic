@@ -305,10 +305,28 @@ pub struct AppFacts {
 /// the directory picker and is validated identically by `workspace_open`.
 fn workspace_from_arguments() -> Option<String> {
     let argument = std::env::args().nth(1)?;
+    // The AppImage runtime starts the payload from inside the mounted bundle,
+    // so the process working directory is not the one the user typed the
+    // argument in. `OWD` is where they actually were; it is only ever used as
+    // the base for a relative path, and the result is validated by
+    // `workspace_open` exactly like a path from the directory picker.
+    let launch_dir = std::env::var_os("OWD").map(std::path::PathBuf::from);
+    resolve_workspace_argument(&argument, launch_dir.as_deref())
+}
+
+fn resolve_workspace_argument(
+    argument: &str,
+    launch_dir: Option<&std::path::Path>,
+) -> Option<String> {
     if argument.starts_with('-') {
         return None;
     }
-    let path = std::fs::canonicalize(argument).ok()?;
+    let candidate = std::path::Path::new(argument);
+    let candidate = match launch_dir {
+        Some(dir) if candidate.is_relative() => dir.join(candidate),
+        _ => candidate.to_path_buf(),
+    };
+    let path = std::fs::canonicalize(candidate).ok()?;
     path.is_dir().then(|| path.to_string_lossy().to_string())
 }
 
@@ -325,5 +343,62 @@ pub fn app_facts<R: Runtime>(app: tauri::AppHandle<R>) -> AppFacts {
         platform: std::env::consts::OS.to_string(),
         version: app.package_info().version.to_string(),
         initial_workspace: workspace_from_arguments(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_workspace_argument;
+
+    #[test]
+    fn absolute_directory_is_accepted() {
+        let dir = tempfile::tempdir().unwrap();
+        let expected = std::fs::canonicalize(dir.path()).unwrap();
+        let resolved = resolve_workspace_argument(dir.path().to_str().unwrap(), None);
+        assert_eq!(resolved, Some(expected.to_string_lossy().to_string()));
+    }
+
+    #[test]
+    fn relative_directory_resolves_against_the_launch_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("notes")).unwrap();
+        let expected = std::fs::canonicalize(dir.path().join("notes")).unwrap();
+        let resolved = resolve_workspace_argument("notes", Some(dir.path()));
+        assert_eq!(resolved, Some(expected.to_string_lossy().to_string()));
+    }
+
+    /// Without `OWD` a relative argument resolves against the process working
+    /// directory, which inside an AppImage is the mounted bundle rather than
+    /// where the user typed the command.
+    #[test]
+    fn relative_directory_is_not_found_without_a_launch_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("notes")).unwrap();
+        assert_eq!(resolve_workspace_argument("notes", None), None);
+    }
+
+    #[test]
+    fn launch_directory_is_ignored_for_absolute_arguments() {
+        let dir = tempfile::tempdir().unwrap();
+        let other = tempfile::tempdir().unwrap();
+        let expected = std::fs::canonicalize(dir.path()).unwrap();
+        let resolved = resolve_workspace_argument(dir.path().to_str().unwrap(), Some(other.path()));
+        assert_eq!(resolved, Some(expected.to_string_lossy().to_string()));
+    }
+
+    #[test]
+    fn flags_and_files_are_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("note.md");
+        std::fs::write(&file, "x").unwrap();
+        assert_eq!(resolve_workspace_argument("--help", Some(dir.path())), None);
+        assert_eq!(
+            resolve_workspace_argument("note.md", Some(dir.path())),
+            None
+        );
+        assert_eq!(
+            resolve_workspace_argument("missing", Some(dir.path())),
+            None
+        );
     }
 }

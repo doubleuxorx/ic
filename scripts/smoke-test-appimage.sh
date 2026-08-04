@@ -1,0 +1,72 @@
+#!/bin/sh
+# Launch an AppImage under a virtual X server and confirm it reaches the point
+# of rendering: the UI process must survive startup and spawn a WebKit web
+# process. Run this in a container that has nothing installed but xvfb, so that
+# a bundle which only works because the build host had GTK or WebKitGTK
+# available cannot pass.
+set -eu
+
+appimage="${1:-}"
+if [ ! -x "$appimage" ]; then
+	echo "usage: $0 <path-to-AppImage>" >&2
+	exit 2
+fi
+
+timeout_seconds="${IC_SMOKE_TIMEOUT:-90}"
+
+workdir="$(mktemp -d)"
+cleanup() {
+	rm -rf "$workdir"
+}
+trap cleanup EXIT
+
+# A writable HOME the application has not seen before, so this also covers
+# first-run state creation rather than reusing anything from the build.
+HOME="$workdir/home"
+XDG_RUNTIME_DIR="$workdir/run"
+export HOME XDG_RUNTIME_DIR
+mkdir -p "$HOME" "$XDG_RUNTIME_DIR"
+chmod 700 "$XDG_RUNTIME_DIR"
+
+# FUSE is deliberately not available to the container, and mounting would need
+# privileges this job should not have.
+export APPIMAGE_EXTRACT_AND_RUN=1
+
+log="$workdir/app.log"
+xvfb-run -a -s '-screen 0 1280x820x24' "$appimage" >"$log" 2>&1 &
+app_pid=$!
+
+started=0
+elapsed=0
+while [ "$elapsed" -lt "$timeout_seconds" ]; do
+	if pgrep -f 'WebKitWebProcess' >/dev/null 2>&1; then
+		started=1
+		break
+	fi
+	# xvfb-run exiting early means the application failed to come up.
+	if ! kill -0 "$app_pid" 2>/dev/null; then
+		break
+	fi
+	sleep 1
+	elapsed=$((elapsed + 1))
+done
+
+kill "$app_pid" 2>/dev/null || true
+wait "$app_pid" 2>/dev/null || true
+
+if [ "$started" -ne 1 ]; then
+	echo "error: the AppImage did not reach a running WebKit web process" >&2
+	echo "--- application output ---" >&2
+	cat "$log" >&2
+	exit 1
+fi
+
+# Fontconfig failing open leaves the WebView with no glyphs while everything
+# else looks healthy, so treat its startup complaints as a failure too.
+if grep -qi 'Fontconfig error\|no fonts configured' "$log"; then
+	echo "error: fontconfig did not resolve inside the bundle" >&2
+	cat "$log" >&2
+	exit 1
+fi
+
+printf 'Smoke test passed for %s\n' "$appimage"

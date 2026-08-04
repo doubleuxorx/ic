@@ -144,25 +144,71 @@ jobs:
     needs: check
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
+
+    env:
+      ALPINE_IMAGE: alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
+      MUSL_CARGO_HOME: /home/runner/.cache/musl-cargo
 
     steps:
       - uses: actions/checkout@v4
 
+      - uses: docker/setup-buildx-action@v3
+
       # GitHub has no hosted Alpine runner. Build in a native x86_64 Alpine
-      # container on the hosted Ubuntu runner instead.
+      # container on the hosted Ubuntu runner instead. Installing the WebKitGTK
+      # toolchain dominates this job, so the image layers are cached.
       - name: Build Alpine AppImage builder
-        run: |
-          docker build --pull --platform linux/amd64 \
-            --file .github/alpine-appimage.Dockerfile \
-            --tag ic-alpine-appimage-builder .
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: .github/alpine-appimage.Dockerfile
+          platforms: linux/amd64
+          tags: ic-alpine-appimage-builder
+          load: true
+          cache-from: type=gha,scope=alpine-appimage
+          cache-to: type=gha,mode=max,scope=alpine-appimage
+
+      # Kept separate from the other jobs' caches: this is a musl target built
+      # by Alpine's rustc, so none of it is interchangeable with their output.
+      - name: Cache musl Rust build
+        uses: actions/cache@v4
+        with:
+          path: |
+            /home/runner/.cache/musl-cargo
+            src-tauri/target
+          key: musl-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: musl-cargo-
 
       - name: Build musl x86_64 AppImage
         run: |
+          mkdir -p "$MUSL_CARGO_HOME"
           docker run --rm --platform linux/amd64 \
             --volume "$GITHUB_WORKSPACE:/workspace" \
+            --volume "$MUSL_CARGO_HOME:/cargo" \
+            --env CARGO_HOME=/cargo \
             --workdir /workspace \
             ic-alpine-appimage-builder
+
+      # The container runs as root, so everything it wrote is owned by root and
+      # any later step that touches the workspace or the cache would fail.
+      - name: Restore workspace ownership
+        if: always()
+        run: sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" "$MUSL_CARGO_HOME"
+
+      # A bare Alpine image with nothing but xvfb: no GTK, no WebKitGTK, none of
+      # the builder's libraries. A bundle that is not self-contained, or whose
+      # AppRun or WebKitGTK path rewriting silently did not apply, fails here
+      # rather than on a user's machine.
+      - name: Smoke test AppImage
+        run: |
+          docker run --rm --platform linux/amd64 \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            --workdir /tmp \
+            "$ALPINE_IMAGE" \
+            /bin/sh -c 'apk add --no-cache xvfb-run >/dev/null &&
+              exec /workspace/scripts/smoke-test-appimage.sh \
+                /workspace/src-tauri/target/release/bundle/appimage-musl/ic_*.AppImage'
 
       - uses: actions/upload-artifact@v4
         with:
