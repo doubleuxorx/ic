@@ -14,6 +14,15 @@ Supported now:
 - Video: MP4 and WebM containers with codecs the host webview supports.
 - Audio: MP3, M4A, OGG, Opus, WAV, FLAC where the webview supports them.
 
+Video and audio are the exception on Linux, where nothing plays in the window.
+WebKitGTK decodes through GStreamer, which fetches only the schemes it knows, so
+a file served from `ic://` never reaches a decoder and the element reports an
+unsupported source however ordinary the file is. Those nodes offer the system
+player instead. Playing media there needs the bytes delivered another way:
+a loopback HTTP server, which keeps range streaming and needs an origin check of
+its own, or a blob URL, which is a few lines but gives up streaming and holds
+the whole file in memory.
+
 Rules that hold throughout: nothing autoplays, one node plays at a time,
 playback stops when a node unmounts, inactive nodes show lightweight previews,
 and original files are never modified or converted.

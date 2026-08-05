@@ -63,7 +63,12 @@ const ImageNodeComponent = ({ nodeId, relativePath, active, alt }: Props) => {
       src={source}
       alt={alt}
       draggable={false}
-      onError={() => setError('image could not be displayed')}
+      // Dropping the source puts the reason on the node, where a failure that
+      // used to be reported nowhere is now visible.
+      onError={() => {
+        setError('image could not be displayed');
+        setSource(null);
+      }}
     />
   );
 };

@@ -37,6 +37,25 @@ export const describeError = (detail: unknown): string => {
 export const isResizeObserverNotice = (event: { error?: unknown; message?: string }): boolean =>
   !event.error && /^ResizeObserver loop/.test(event.message ?? '');
 
+/** Elements that report a failed source to the view that renders them. */
+const CONTENT_ELEMENTS = new Set(['AUDIO', 'VIDEO', 'IMG', 'SOURCE', 'TRACK']);
+
+/**
+ * An error event an image or media element raised about its own source.
+ *
+ * These are dispatched at the element and do not bubble; the window listener
+ * sees them only because it captures. They carry no exception, so reporting one
+ * would cover a working application with a crash overlay reading "undefined",
+ * and the node that owns the element already says what failed and offers the
+ * system player. A script or stylesheet that fails to load is not in this
+ * class: nothing else would report it and the window would be blank, so it
+ * stays fatal.
+ */
+export const isContentLoadFailure = (event: { target?: unknown }): boolean => {
+  const tagName = (event.target as { tagName?: unknown } | null | undefined)?.tagName;
+  return typeof tagName === 'string' && CONTENT_ELEMENTS.has(tagName);
+};
+
 const BUTTON_STYLE =
   'font:inherit;padding:6px 12px;border:1px solid CanvasText;border-radius:4px;background:transparent;color:inherit;cursor:pointer';
 

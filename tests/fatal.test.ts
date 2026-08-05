@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { describeError, isResizeObserverNotice } from '@/shared/fatal';
+import { describeError, isContentLoadFailure, isResizeObserverNotice } from '@/shared/fatal';
 
 describe('describeError', () => {
   it('keeps the stack when there is one', () => {
@@ -37,5 +37,23 @@ describe('isResizeObserverNotice', () => {
   it('reports everything else', () => {
     expect(isResizeObserverNotice({ message: 'TypeError: x is not a function' })).toBe(false);
     expect(isResizeObserverNotice({})).toBe(false);
+  });
+});
+
+describe('isContentLoadFailure', () => {
+  it('recognises a source an image or media element refused', () => {
+    expect(isContentLoadFailure({ target: { tagName: 'VIDEO' } })).toBe(true);
+    expect(isContentLoadFailure({ target: { tagName: 'AUDIO' } })).toBe(true);
+    expect(isContentLoadFailure({ target: { tagName: 'IMG' } })).toBe(true);
+    expect(isContentLoadFailure({ target: { tagName: 'SOURCE' } })).toBe(true);
+  });
+
+  it('leaves a script error and a failed bundle load fatal', () => {
+    // A script error is dispatched at the window, which has no tag name.
+    expect(isContentLoadFailure({ target: { location: '/' } })).toBe(false);
+    expect(isContentLoadFailure({ target: { tagName: 'SCRIPT' } })).toBe(false);
+    expect(isContentLoadFailure({ target: { tagName: 'LINK' } })).toBe(false);
+    expect(isContentLoadFailure({ target: null })).toBe(false);
+    expect(isContentLoadFailure({})).toBe(false);
   });
 });

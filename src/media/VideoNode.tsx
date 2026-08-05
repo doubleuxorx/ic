@@ -6,7 +6,11 @@
  * one node plays at a time, and playback stops when the node unmounts.
  *
  * Container support is probed in Rust; codec support is asked of the webview
- * itself rather than inferred from the extension.
+ * itself rather than inferred from the extension. A webview that refuses the
+ * source says so through the element's own error event, and the node then offers
+ * the system player. WebKitGTK refuses every one: its GStreamer backend only
+ * fetches schemes it knows, so nothing served from `ic://` reaches a decoder,
+ * however ordinary the file is.
  */
 
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -35,6 +39,8 @@ export const MediaPlayer = ({ nodeId, relativePath, active, audioOnly = false }:
   const [position, setPosition] = useState(0);
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
+  /** Set when the element itself rejected the source it was given. */
+  const [refused, setRefused] = useState(false);
 
   const playingNodeId = useMediaStore((state) => state.playingNodeId);
   const claim = useMediaStore((state) => state.claimPlayback);
@@ -42,6 +48,7 @@ export const MediaPlayer = ({ nodeId, relativePath, active, audioOnly = false }:
 
   useEffect(() => {
     let cancelled = false;
+    setRefused(false);
     ipc
       .mediaProbe(relativePath)
       .then((result) => {
@@ -86,11 +93,18 @@ export const MediaPlayer = ({ nodeId, relativePath, active, audioOnly = false }:
     return <div className="placeholder">{error}</div>;
   }
 
-  if (probe && probe.strategy === 'external-player') {
+  // Either Rust knows the container will not play, or the element has just said
+  // so about this file. Both end in the same offer.
+  const unplayable =
+    refused || probe?.strategy === 'external-player'
+      ? `${(probe?.container ?? '').toUpperCase() || 'This file'} is not playable in this window yet.`
+      : null;
+
+  if (unplayable) {
     return (
       <div className="placeholder">
         <div>
-          <div>{probe.container.toUpperCase()} is not playable in this window yet.</div>
+          <div>{unplayable}</div>
           <button
             type="button"
             className="icon-button nodrag"
@@ -131,7 +145,7 @@ export const MediaPlayer = ({ nodeId, relativePath, active, audioOnly = false }:
           setPlaying(false);
           release(nodeId);
         }}
-        onError={() => setError('this file cannot be played by the webview')}
+        onError={() => setRefused(true)}
         onDoubleClick={(event) => {
           event.stopPropagation();
           if (!audioOnly) void event.currentTarget.requestFullscreen?.().catch(() => undefined);
