@@ -48,14 +48,6 @@ written by hand. After changing `yarn.lock` or `src-tauri/Cargo.lock`, run
 `flatpak/generate-sources.sh` and commit the result; CI fails if the two drift
 apart.
 
-Two AppImages are published. The musl one carries its own GTK, WebKitGTK and
-Mesa and runs anywhere; the glibc one borrows the host's graphics stack, so on a
-distribution much newer than the one it was built on WebKitGTK can fail to
-create an EGL display and abort with an empty white window. It therefore asks
-WebKitGTK to paint in software, which costs speed but always draws. Set
-`IC_WEBKIT_GPU=1` to keep acceleration on a host where it works, and prefer the
-musl AppImage — or the deb, rpm or Flatpak — if it does not.
-
 Open a directory with `Open workspace…` from the palette, or pass one on the
 command line:
 
