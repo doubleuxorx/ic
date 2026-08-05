@@ -29,8 +29,8 @@ const RANGE_CHUNK: u64 = 2 * 1024 * 1024;
 /// response can allocate memory for the document.
 const MAX_PDF_BYTES: u64 = 128 * 1024 * 1024;
 
-/// Origins allowed to read from the `ic://` protocol.
-fn is_allowed_origin(origin: &str) -> bool {
+/// Origins allowed to read from the `ic://` protocol and the media server.
+pub(crate) fn is_allowed_origin(origin: &str) -> bool {
     matches!(
         origin,
         "tauri://localhost" | "http://tauri.localhost" | "https://tauri.localhost"
@@ -100,7 +100,9 @@ fn handle_workspace_request<R: tauri::Runtime>(
         .headers()
         .get(header::RANGE)
         .and_then(|value| value.to_str().ok())
-        .and_then(|value| parse_range(value, total));
+        // The response is built in memory here, so an open-ended range is cut to
+        // one chunk and the player asks again for the next.
+        .and_then(|value| parse_range(value, total, Some(RANGE_CHUNK)));
 
     let mut builder = Response::builder()
         .header(header::CONTENT_TYPE, mime)
@@ -149,7 +151,11 @@ fn handle_workspace_request<R: tauri::Runtime>(
 }
 
 /// Parse a single-range `bytes=` header. Multi-range requests are ignored.
-fn parse_range(value: &str, total: u64) -> Option<(u64, u64)> {
+///
+/// `max_chunk` bounds an open-ended range, for a caller that has to hold the
+/// whole response in memory. A caller that streams passes `None` and serves to
+/// the end of the file.
+pub(crate) fn parse_range(value: &str, total: u64, max_chunk: Option<u64>) -> Option<(u64, u64)> {
     if total == 0 {
         return None;
     }
@@ -167,7 +173,11 @@ fn parse_range(value: &str, total: u64) -> Option<(u64, u64)> {
         }
         (start, "") => {
             let start: u64 = start.parse().ok()?;
-            (start, (start + RANGE_CHUNK - 1).min(total - 1))
+            let end = match max_chunk {
+                Some(chunk) => (start + chunk - 1).min(total - 1),
+                None => total - 1,
+            };
+            (start, end)
         }
         (start, end) => {
             let start: u64 = start.parse().ok()?;
@@ -186,6 +196,18 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(WorkspaceState::default())
+        .setup(|app| {
+            // Where a webview will not play media from a custom scheme, the same
+            // files are served over loopback HTTP instead. Failing to listen is
+            // not fatal: media then falls back to `ic://`, and a node that cannot
+            // play offers the system player.
+            if media::server::is_needed() {
+                if let Some(server) = media::server::start(app.handle().clone()) {
+                    app.manage(server);
+                }
+            }
+            Ok(())
+        })
         .register_uri_scheme_protocol(WORKSPACE_SCHEME, handle_workspace_request)
         .invoke_handler(tauri::generate_handler![
             commands::app_facts,
@@ -221,19 +243,29 @@ mod tests {
 
     #[test]
     fn parses_ranges() {
-        assert_eq!(parse_range("bytes=0-99", 1000), Some((0, 99)));
-        assert_eq!(parse_range("bytes=990-", 1000), Some((990, 999)));
-        assert_eq!(parse_range("bytes=-100", 1000), Some((900, 999)));
-        assert_eq!(parse_range("bytes=0-5000", 1000), Some((0, 999)));
+        assert_eq!(parse_range("bytes=0-99", 1000, None), Some((0, 99)));
+        assert_eq!(parse_range("bytes=990-", 1000, None), Some((990, 999)));
+        assert_eq!(parse_range("bytes=-100", 1000, None), Some((900, 999)));
+        assert_eq!(parse_range("bytes=0-5000", 1000, None), Some((0, 999)));
+    }
+
+    /// An open-ended range is the only one a chunk limit applies to: the others
+    /// already say where they end.
+    #[test]
+    fn an_open_ended_range_honours_a_chunk_limit() {
+        assert_eq!(parse_range("bytes=0-", 1000, Some(100)), Some((0, 99)));
+        assert_eq!(parse_range("bytes=950-", 1000, Some(100)), Some((950, 999)));
+        assert_eq!(parse_range("bytes=0-", 1000, None), Some((0, 999)));
+        assert_eq!(parse_range("bytes=0-49", 1000, Some(100)), Some((0, 49)));
     }
 
     #[test]
     fn rejects_bad_ranges() {
-        assert_eq!(parse_range("bytes=1000-1200", 1000), None);
-        assert_eq!(parse_range("bytes=50-10", 1000), None);
-        assert_eq!(parse_range("items=0-10", 1000), None);
-        assert_eq!(parse_range("bytes=0-10,20-30", 1000), None);
-        assert_eq!(parse_range("bytes=-", 1000), None);
+        assert_eq!(parse_range("bytes=1000-1200", 1000, None), None);
+        assert_eq!(parse_range("bytes=50-10", 1000, None), None);
+        assert_eq!(parse_range("items=0-10", 1000, None), None);
+        assert_eq!(parse_range("bytes=0-10,20-30", 1000, None), None);
+        assert_eq!(parse_range("bytes=-", 1000, None), None);
     }
 
     #[test]

@@ -91,6 +91,11 @@ export interface AppFacts {
   version: string;
   /** Directory named on the command line, e.g. `ic ~/notes`. */
   initialWorkspace: string | null;
+  /**
+   * Where audio and video are fetched from, token included, on the platforms
+   * whose webview will not play them from `protocolHost`. Null means it will.
+   */
+  mediaOrigin: string | null;
 }
 
 export interface ChangeEvent {

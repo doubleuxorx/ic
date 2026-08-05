@@ -100,6 +100,12 @@ handler in `src-tauri/src/lib.rs` streams files that resolve inside the open
 workspace, supports HTTP range requests so seeking a large video does not buffer
 the whole file, and refuses anything whose sniffed type is not renderable.
 
+Audio and video are the one exception, on Linux only: WebKitGTK will not decode
+from a custom scheme at all, so `media/server.rs` serves those two kinds over
+loopback HTTP instead. Which transport a media element uses is Rust's answer to
+give — `app_facts` reports it and `mediaUrl` follows it — so no view knows or
+cares. The server's rules are in the security model.
+
 ## Extension boundaries
 
 The plan defers scripting, program nodes and extensions. The seams that would

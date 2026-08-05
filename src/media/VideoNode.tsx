@@ -1,23 +1,23 @@
 /**
  * Video view.
  *
- * An ordinary HTML media element streams from the local protocol, which serves
- * byte ranges so seeking does not buffer whole files. Nothing autoplays, only
+ * An ordinary HTML media element streams the file, byte range by byte range, so
+ * seeking never buffers the whole of it. Where that comes from is Rust's to say
+ * — `mediaUrl` follows whichever transport this webview can actually decode
+ * from — and nothing else here depends on the answer. Nothing autoplays, only
  * one node plays at a time, and playback stops when the node unmounts.
  *
  * Container support is probed in Rust; codec support is asked of the webview
  * itself rather than inferred from the extension. A webview that refuses the
  * source says so through the element's own error event, and the node then offers
- * the system player. WebKitGTK refuses every one: its GStreamer backend only
- * fetches schemes it knows, so nothing served from `ic://` reaches a decoder,
- * however ordinary the file is.
+ * the system player.
  */
 
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
 import { errorMessage } from '@/shared/errors';
 import { ipc, type MediaProbe } from '@/shared/ipc-types';
-import { fileUrl } from '@/workspace/workspace-store';
+import { mediaUrl } from '@/workspace/workspace-store';
 
 import { Icon } from '@/canvas/node-types/NodeShell';
 import { formatDuration, useMediaStore } from './media-view-store';
@@ -126,7 +126,7 @@ export const MediaPlayer = ({ nodeId, relativePath, active, audioOnly = false }:
       <MediaTag
         ref={element as React.RefObject<HTMLVideoElement>}
         className="media-fill nodrag"
-        src={fileUrl(relativePath)}
+        src={mediaUrl(relativePath)}
         // Metadata only: a canvas full of videos must not preload their content.
         preload="metadata"
         playsInline

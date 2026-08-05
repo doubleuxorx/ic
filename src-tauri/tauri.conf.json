@@ -27,7 +27,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' ic: http://ic.localhost data: blob:; media-src 'self' ic: http://ic.localhost blob:; font-src 'self' data:; connect-src 'self' ic: http://ic.localhost ipc: http://ipc.localhost; worker-src 'self' blob:; child-src 'self' blob:; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      "csp": "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' ic: http://ic.localhost data: blob:; media-src 'self' ic: http://ic.localhost http://127.0.0.1:* blob:; font-src 'self' data:; connect-src 'self' ic: http://ic.localhost ipc: http://ipc.localhost; worker-src 'self' blob:; child-src 'self' blob:; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
       "dangerousDisableAssetCspModification": false,
       "freezePrototype": false,
       "assetProtocol": {

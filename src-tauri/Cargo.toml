@@ -33,6 +33,8 @@ percent-encoding = "2"
 sha2 = "0.10"
 infer = "0.19"
 urlencoding = "2"
+tiny_http = { version = "0.12", default-features = false }
+getrandom = "0.3"
 
 [features]
 # Selects the embedded frontend instead of a dev server. The Tauri CLI enables

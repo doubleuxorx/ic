@@ -11,7 +11,7 @@ pub use external::{external_open_path, external_open_url, reveal_in_file_manager
 pub use recovery::{recovery_clear, recovery_list, recovery_write};
 
 use serde::{Deserialize, Serialize};
-use tauri::{Runtime, State, WebviewWindow};
+use tauri::{Manager, Runtime, State, WebviewWindow};
 
 use crate::media::{self, MediaProbe};
 use crate::persistence::{self, DocumentContent, PersistenceError, Revision};
@@ -298,6 +298,9 @@ pub struct AppFacts {
     pub version: String,
     /// Directory passed on the command line, if it is one.
     pub initial_workspace: Option<String>,
+    /// Where audio and video are fetched from when the webview will not take
+    /// them from the custom scheme. Absent means `protocol_host` serves them.
+    pub media_origin: Option<String>,
 }
 
 /// A single positional argument naming a directory opens it as the workspace,
@@ -343,6 +346,9 @@ pub fn app_facts<R: Runtime>(app: tauri::AppHandle<R>) -> AppFacts {
         platform: std::env::consts::OS.to_string(),
         version: app.package_info().version.to_string(),
         initial_workspace: workspace_from_arguments(),
+        media_origin: app
+            .try_state::<media::server::MediaServer>()
+            .map(|server| server.origin().to_string()),
     }
 }
 

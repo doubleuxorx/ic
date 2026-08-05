@@ -23,7 +23,9 @@ the installed application, and physical access.
 
 1. **Opening a workspace or canvas never executes anything.** There is no
    scripting engine, no plugin loader, no program node and no shell access.
-2. **No network.** The application makes no outbound requests. Every asset —
+2. **No network.** The application makes no outbound requests, and the only
+   socket it listens on is the loopback media server described below. Every
+   asset —
    PDF.js and its worker, character maps, standard fonts, WASM decoders, fonts,
    styles — is bundled locally. Remote images referenced from Markdown are
    dropped rather than fetched.
@@ -118,6 +120,36 @@ range-load the non-HTTP `ic://` scheme used on macOS and Linux, so those platfor
 buffer the complete document subject to the 128 MiB limit. These protections do
 not replace prompt PDF.js and webview security updates.
 
+## Loopback media server
+
+WebKitGTK decodes media through GStreamer, which fetches only the schemes it
+knows, so nothing served from `ic://` ever reaches a decoder there. On that
+platform, and only there, `media/server.rs` serves audio and video over HTTP
+instead. It listens on `127.0.0.1` on a port the kernel chooses, so nothing off
+the machine can reach it, and it is subject to the same rules as everything else
+plus its own:
+
+- every request path begins with a 32-byte token from the system generator,
+  compared without revealing where two tokens differ, so another local process
+  cannot read workspace files by guessing the port;
+- a `Host` header naming anything other than the address it listens on is
+  refused, as is an `Origin` outside the same allowlist the `ic://` handler uses;
+- only `GET` and `HEAD`, and only one range per request;
+- paths are resolved by the open workspace and sniffed for content exactly as the
+  protocol handler does, and **only audio and video are served** — a note, a
+  canvas, an image or anything under `.app` is refused even with the token;
+- nothing is served while no workspace is open;
+- responses carry the same `no-store`, `nosniff` and `default-src 'none';
+  sandbox` headers as the protocol handler, and always a `Content-Length`.
+
+Requests are answered by a fixed, small pool of threads, so no client can make
+the process spawn threads without end. Failing to listen is not fatal: media
+falls back to `ic://`, and a node whose source the webview refuses offers the
+system player.
+
+Covered by tests in `media/server.rs` for the token, the path split and the kinds
+served.
+
 ## External opening
 
 `commands/external.rs` never invokes a shell. The platform opener is executed
@@ -132,7 +164,7 @@ default-src 'none';
 script-src 'self' 'wasm-unsafe-eval';
 style-src 'self' 'unsafe-inline';
 img-src 'self' ic: http://ic.localhost data: blob:;
-media-src 'self' ic: http://ic.localhost blob:;
+media-src 'self' ic: http://ic.localhost http://127.0.0.1:* blob:;
 font-src 'self' data:;
 connect-src 'self' ic: http://ic.localhost ipc: http://ipc.localhost;
 worker-src 'self' blob:;
@@ -140,7 +172,9 @@ object-src 'none'; frame-src 'none';
 base-uri 'none'; form-action 'none'; frame-ancestors 'none'
 ```
 
-No remote origin appears anywhere in it. `'wasm-unsafe-eval'` is required by
+No remote origin appears anywhere in it: `http://127.0.0.1:*` is the loopback
+media server above, whose port is only known to this process and whose paths need
+its token. `'wasm-unsafe-eval'` is required by
 PDF.js image decoders; unlike `'unsafe-eval'`, it permits WebAssembly compilation
 but not JavaScript evaluation. `'unsafe-inline'` for styles is required by
 CodeMirror and React Flow, which set element styles directly; it grants no

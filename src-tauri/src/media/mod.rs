@@ -4,6 +4,11 @@
 //! is worth attempting. Remuxing, proxy transcoding and native players are
 //! deliberately absent: this module exists so those can be added behind the
 //! same narrow command without changing the frontend contract.
+//!
+//! [`server`] carries the bytes on the platforms whose webview will not take them
+//! from the custom scheme.
+
+pub mod server;
 
 use serde::Serialize;
 
