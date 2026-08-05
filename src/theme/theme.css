@@ -480,9 +480,15 @@ body {
   align-items: center;
 }
 
+/* A title box is a label, so its text sits in the middle of the box on both
+   axes. `justify-content` centres the line, `text-align` centres each row once
+   a narrow box makes it wrap. Prose and file contents keep the plain layout:
+   only this variant is centred. */
 .plain-text.title {
   font-weight: 600;
   letter-spacing: -0.01em;
+  justify-content: center;
+  text-align: center;
 }
 
 /* ---------------------------------------------------------------- editor */

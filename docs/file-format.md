@@ -81,6 +81,10 @@ syntax reads as a title — so no proprietary typography metadata is stored. For
 styling that must survive in other applications, use portable Markdown such as
 `# Heading`.
 
+A title is centred in its box and scales with the box height. Both are
+presentation only: editing the node shows the same plain source as any other
+text node, and another application reading the file sees only the text.
+
 ## Revisions and conflicts
 
 Every read returns a revision: the SHA-256 of the file's bytes. Every write
