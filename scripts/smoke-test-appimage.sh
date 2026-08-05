@@ -1,7 +1,8 @@
 #!/bin/sh
 # Launch an AppImage under a virtual X server and confirm it reaches the point
 # of rendering: the UI process must survive startup and spawn a WebKit web
-# process. Run this in a container that has nothing installed but xvfb, so that
+# process that then keeps running. Run this in a container that has nothing
+# installed but xvfb, so that
 # a bundle which only works because the build host had GTK or WebKitGTK
 # available cannot pass.
 set -eu
@@ -13,6 +14,9 @@ if [ ! -x "$appimage" ]; then
 fi
 
 timeout_seconds="${IC_SMOKE_TIMEOUT:-90}"
+# Long enough to cover several restarts: WebKitGTK replaced a web process that
+# aborted on startup about every four seconds.
+settle_seconds="${IC_SMOKE_SETTLE:-12}"
 
 workdir="$(mktemp -d)"
 cleanup() {
@@ -36,11 +40,15 @@ log="$workdir/app.log"
 xvfb-run -a -s '-screen 0 1280x820x24' "$appimage" >"$log" 2>&1 &
 app_pid=$!
 
-started=0
+web_pid=''
 elapsed=0
 while [ "$elapsed" -lt "$timeout_seconds" ]; do
-	if pgrep -f 'WebKitWebProcess' >/dev/null 2>&1; then
-		started=1
+	# Newest match: outside a container, a web process left behind by an
+	# earlier run would otherwise be picked up and outlive the whole test.
+	# || true: pgrep exits non-zero until the process exists, which set -e
+	# would otherwise take for a failure of this script.
+	web_pid="$(pgrep -n -f 'WebKitWebProcess' 2>/dev/null || true)"
+	if [ -n "$web_pid" ]; then
 		break
 	fi
 	# xvfb-run exiting early means the application failed to come up.
@@ -51,11 +59,32 @@ while [ "$elapsed" -lt "$timeout_seconds" ]; do
 	elapsed=$((elapsed + 1))
 done
 
+# One that starts is not one that runs. A web process which aborts during
+# startup is replaced by WebKitGTK immediately, so a bundle it cannot survive in
+# has a web process at every moment anyone looks and an empty window throughout.
+# That is what missing ICU data did, and it reached users because this test
+# looked once. Wait for the process found above, by pid, to still be there.
+survived=0
+if [ -n "$web_pid" ]; then
+	sleep "$settle_seconds"
+	if kill -0 "$web_pid" 2>/dev/null; then
+		survived=1
+	fi
+fi
+
 kill "$app_pid" 2>/dev/null || true
 wait "$app_pid" 2>/dev/null || true
 
-if [ "$started" -ne 1 ]; then
+if [ -z "$web_pid" ]; then
 	echo "error: the AppImage did not reach a running WebKit web process" >&2
+	echo "--- application output ---" >&2
+	cat "$log" >&2
+	exit 1
+fi
+
+if [ "$survived" -ne 1 ]; then
+	echo "error: the WebKit web process died within ${settle_seconds}s of" >&2
+	echo "       starting, so nothing was ever painted" >&2
 	echo "--- application output ---" >&2
 	cat "$log" >&2
 	exit 1
