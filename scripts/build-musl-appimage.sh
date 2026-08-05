@@ -71,6 +71,16 @@ install -m 0644 \
 cp -a /usr/lib/webkit2gtk-4.1/. "$appdir/usr/lib/webkit2gtk-4.1/"
 cp -a /usr/libexec/webkit2gtk-4.1/. "$appdir/usr/libexec/webkit2gtk-4.1/"
 
+# libepoxy resolves GL entry points by dlopening these, so nothing records them
+# as a dependency and appimagetool cannot find them the way it finds the rest.
+# WebKitGTK treats the failure as fatal and aborts the process that paints, so a
+# bundle without them draws an empty window on any host that has no musl build
+# of Mesa to fall back to. Copied before appimagetool runs, so it deploys their
+# dependencies and patches them like everything else it was given.
+for dlopened in libGLESv2.so.2 libGLESv1_CM.so.1; do
+	cp -aL "/usr/lib/$dlopened" "$appdir/usr/lib/$dlopened"
+done
+
 # %F rather than %U: the application resolves its positional argument with
 # `canonicalize`, so it takes local paths and not file:// URIs.
 cat >"$appdir/usr/share/applications/ic.desktop" <<'DESKTOP'
@@ -262,6 +272,70 @@ if ! strings "$webkit_library" | grep -qF '././/libexec/webkit2gtk-4.1'; then
 	exit 1
 fi
 
+# AppRun runs the application under the bundled loader, but WebKitGTK spawns its
+# helper processes itself, and the /lib/ld-musl-x86_64.so.1 each of them records
+# as its interpreter is resolved by the kernel against the host, not against the
+# bundle. A host without musl has no such file, so execve fails with ENOENT and
+# the application aborts on its first spawn having drawn nothing.
+#
+# An interpreter the kernel finds relative is resolved against the current
+# directory, which AppRun has made AppDir/usr — the same directory the helper
+# path rewritten above is relative to. So point every spawned executable at the
+# loader through the bundle, with a path one byte shorter than the absolute one
+# it replaces, written over it in place. The byte that terminated the old path
+# stays where it is and terminates the new one, which is what the kernel checks
+# for. patchelf would grow the file to hold the path instead, moving sections
+# the way it moved GTK's GResource above.
+bundled_interpreter=lib/ld-musl-x86_64.so.1
+ln -s ../../lib/ld-musl-x86_64.so.1 "$appdir/usr/$bundled_interpreter"
+test -e "$appdir/usr/$bundled_interpreter"
+
+command find "$appdir/usr/libexec" -type f -perm -u+x -print |
+	while IFS= read -r spawned; do
+		case "$(file -b "$spawned")" in
+		*ELF*executable*) ;;
+		*) continue ;;
+		esac
+		interp="$(readelf -SW "$spawned" | awk '{
+			for (i = 1; i <= NF; i++)
+				if ($i == ".interp")
+					print $(i + 3), $(i + 4)
+		}')"
+		start="$((0x${interp% *}))"
+		length="$((0x${interp#* }))"
+		# One byte for the terminator that has to stay inside the section.
+		if [ "$start" -eq 0 ] || [ "${#bundled_interpreter}" -ge "$length" ]; then
+			echo "error: $spawned has no .interp long enough to hold" >&2
+			echo "       $bundled_interpreter" >&2
+			continue
+		fi
+		printf '%s\0' "$bundled_interpreter" |
+			dd of="$spawned" bs=1 seek="$start" conv=notrunc 2>/dev/null
+	done
+
+# Guarded after the fact, in both directions: the two helpers the application
+# cannot start without have to ask for the bundled loader now, and nothing that
+# is spawned may still ask for one by an absolute path the host would answer.
+for helper in WebKitNetworkProcess WebKitWebProcess; do
+	if ! readelf -lW "$appdir/usr/libexec/webkit2gtk-4.1/$helper" |
+		grep -qF "Requesting program interpreter: $bundled_interpreter"; then
+		echo "error: $helper does not request the bundled loader" >&2
+		exit 1
+	fi
+done
+host_loader="$(command find "$appdir/usr/libexec" -type f -perm -u+x -print |
+	while IFS= read -r spawned; do
+		if readelf -lW "$spawned" 2>/dev/null |
+			grep -q 'Requesting program interpreter: /'; then
+			echo "$spawned"
+		fi
+	done)"
+if [ -n "$host_loader" ]; then
+	echo "error: these are spawned through the host's loader:" >&2
+	echo "$host_loader" >&2
+	exit 1
+fi
+
 # Include compiled GLib schemas used by GTK and WebKitGTK.
 mkdir -p "$appdir/usr/share/glib-2.0/schemas"
 cp -a /usr/share/glib-2.0/schemas/. "$appdir/usr/share/glib-2.0/schemas/"
@@ -293,6 +367,7 @@ test ! -L "$appdir/etc/fonts/fonts.conf"
 loader="$appdir/lib/ld-musl-x86_64.so.1"
 test -x "$appdir/AppRun"
 test -e "$loader"
+test -e "$appdir/usr/lib/libGLESv2.so.2"
 test -x "$appdir/usr/libexec/webkit2gtk-4.1/WebKitNetworkProcess"
 test -x "$appdir/usr/libexec/webkit2gtk-4.1/WebKitWebProcess"
 test -f "$appdir/usr/lib/webkit2gtk-4.1/injected-bundle/libwebkit2gtkinjectedbundle.so"
@@ -326,7 +401,9 @@ extracted="$extract_dir/squashfs-root"
 test -e "$extracted/lib/ld-musl-x86_64.so.1"
 test -x "$extracted/usr/bin/ic"
 test -x "$extracted/usr/libexec/webkit2gtk-4.1/WebKitNetworkProcess"
+test -e "$extracted/usr/$bundled_interpreter"
 test -f "$extracted/usr/lib/webkit2gtk-4.1/injected-bundle/libwebkit2gtkinjectedbundle.so"
+test -f "$extracted/usr/lib/libGLESv2.so.2"
 test -f "$extracted/usr/share/glib-2.0/schemas/gschemas.compiled"
 test -f "$extracted/usr/share/fonts/dejavu/DejaVuSans.ttf"
 test ! -L "$extracted/etc/fonts/fonts.conf"
@@ -334,8 +411,18 @@ if ! file "$extracted/usr/bin/ic" | grep -q 'interpreter /lib/ld-musl-x86_64.so.
 	echo "error: packaged application payload is not musl x86_64" >&2
 	exit 1
 fi
+# Squashfs keeps the symlink and the rewritten interpreter, and the application
+# binary keeps the absolute one: AppRun starts it under the bundled loader
+# itself, so it is the one file here the kernel never has to find a loader for.
+if ! file "$extracted/usr/libexec/webkit2gtk-4.1/WebKitWebProcess" |
+	grep -q "interpreter $bundled_interpreter"; then
+	echo "error: the packaged web process does not request the bundled loader" >&2
+	exit 1
+fi
 
 # Nothing above launches anything. scripts/smoke-test-appimage.sh does, and CI
 # runs it in a bare Alpine container so that a bundle which only works because
-# the builder happens to have the libraries installed cannot pass.
+# the builder happens to have the libraries installed cannot pass, and in a bare
+# Debian container so that one which only works because the host has musl cannot
+# either.
 printf 'Created %s\n' "$artifact"
