@@ -58,6 +58,15 @@ ic ~/notes
 The first time a workspace is opened the application asks whether to reopen it
 next time; nothing is remembered without that consent.
 
+Application-level state is stored locally in the system webview's
+`localStorage`:
+
+- Remembered workspace path
+- Selected theme
+- Editor preferences (Vi mode and live preview)
+
+This state persists across launches and is separate from workspace files.
+
 ## Workspace
 
 ```
