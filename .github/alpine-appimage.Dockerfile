@@ -5,7 +5,10 @@ FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec4
 
 # Keep the build native to musl. In particular, do not add gcompat: the
 # AppImage tool used by scripts/build-musl-appimage.sh is statically linked.
-# font-dejavu is bundled into the AppDir, not just used at build time.
+# font-dejavu and icu-data-full are bundled into the AppDir, not just used at
+# build time. icu-data-full is named rather than left to icu-libs, which is
+# satisfied by icu-data-en as well and would put a fraction of the locales in
+# the bundle depending on how apk resolved it that day.
 RUN apk add --no-cache \
       build-base \
       ca-certificates \
@@ -18,6 +21,7 @@ RUN apk add --no-cache \
       font-dejavu \
       git \
       grep \
+      icu-data-full \
       libayatana-appindicator-dev \
       librsvg-dev \
       linux-headers \

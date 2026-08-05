@@ -187,6 +187,10 @@ app_run_env="$workdir/apprun-env.sh"
 cat >"$app_run_env" <<'APPRUN_ENV'
 export GTK_DATA_PREFIX="${HERE}/usr"
 
+# ICU's data file is bundled beside its libraries rather than in the versioned
+# directory they were built to read it from, so name that directory here.
+export ICU_DATA="${HERE}/usr/share/icu"
+
 # AppRun cd's into the bundle further down, so a relative path on the command
 # line would otherwise resolve against AppDir/usr. The AppImage runtime exports
 # the invocation directory as OWD, but only when it mounts the bundle with
@@ -224,7 +228,9 @@ install -m 0755 "$app_run_tmp" "$appdir/AppRun"
 # the bundle. go-appimage's default of "Default" needs theme files on disk.
 sed -i 's/export GTK_THEME=Default/export GTK_THEME=Adwaita/' "$appdir/AppRun"
 
-if ! grep -q 'GTK_DATA_PREFIX' "$appdir/AppRun" || ! grep -q 'export OWD' "$appdir/AppRun"; then
+if ! grep -q 'GTK_DATA_PREFIX' "$appdir/AppRun" ||
+	! grep -q 'export OWD' "$appdir/AppRun" ||
+	! grep -q 'export ICU_DATA' "$appdir/AppRun"; then
 	echo "error: AppRun environment block was not inserted; the generated" >&2
 	echo "       AppRun no longer has a line starting with HERE=" >&2
 	exit 1
@@ -267,6 +273,23 @@ mkdir -p "$appdir/usr/share/glib-2.0/schemas"
 cp -a /usr/share/glib-2.0/schemas/. "$appdir/usr/share/glib-2.0/schemas/"
 glib-compile-schemas "$appdir/usr/share/glib-2.0/schemas"
 
+# Alpine keeps ICU's tables in a data file and ships libicudata.so.78 as a stub
+# that holds none of them. appimagetool deploys libraries, so the bundle got the
+# stub and no data, and ICU aborts the process it is in the moment something
+# asks it for a locale resource it cannot find. WebKitGTK asks for a line-break
+# iterator as soon as it lays out text, so the web process died before drawing
+# anything and the window stayed white, with nothing said on stderr. Only hosts
+# with ICU installed at exactly this version escaped it, by lending theirs.
+icu_data="$(command find /usr/share/icu -name 'icudt*.dat' -print -quit)"
+if [ -z "$icu_data" ]; then
+	echo "error: the builder has no ICU data file to bundle; install" >&2
+	echo "       icu-data-full" >&2
+	exit 1
+fi
+icu_data_name="$(basename "$icu_data")"
+mkdir -p "$appdir/usr/share/icu"
+cp -a "$icu_data" "$appdir/usr/share/icu/$icu_data_name"
+
 # go-appimage points FONTCONFIG_FILE at AppDir/etc/fonts/fonts.conf, which it
 # creates as an absolute symlink into the host. That dangles on a host without
 # fontconfig and leaves the WebView with no fonts at all. Bundle a real
@@ -296,6 +319,7 @@ test -e "$loader"
 test -x "$appdir/usr/libexec/webkit2gtk-4.1/WebKitNetworkProcess"
 test -x "$appdir/usr/libexec/webkit2gtk-4.1/WebKitWebProcess"
 test -f "$appdir/usr/lib/webkit2gtk-4.1/injected-bundle/libwebkit2gtkinjectedbundle.so"
+test -f "$appdir/usr/share/icu/$icu_data_name"
 
 # Matters when this script runs on an Alpine host directly rather than in the
 # container, where none of these are set: go-appimage treats them as a request
@@ -328,6 +352,7 @@ test -x "$extracted/usr/bin/ic"
 test -x "$extracted/usr/libexec/webkit2gtk-4.1/WebKitNetworkProcess"
 test -f "$extracted/usr/lib/webkit2gtk-4.1/injected-bundle/libwebkit2gtkinjectedbundle.so"
 test -f "$extracted/usr/share/glib-2.0/schemas/gschemas.compiled"
+test -f "$extracted/usr/share/icu/$icu_data_name"
 test -f "$extracted/usr/share/fonts/dejavu/DejaVuSans.ttf"
 test ! -L "$extracted/etc/fonts/fonts.conf"
 if ! file "$extracted/usr/bin/ic" | grep -q 'interpreter /lib/ld-musl-x86_64.so.1'; then
