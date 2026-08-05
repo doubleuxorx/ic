@@ -132,12 +132,48 @@ jobs:
       - name: Build installers
         run: npx tauri build
 
+      # One artifact per installer rather than one per runner, named for what
+      # comes out of it. Each names its format's directory instead of globbing
+      # the whole bundle tree, so a target that silently stops being built
+      # fails the job here rather than going missing from a release.
       - uses: actions/upload-artifact@v4
+        if: matrix.os == 'ubuntu-latest'
         with:
-          name: ic-${{ matrix.os }}
-          path: |
-            src-tauri/target/release/bundle/**/*
-          if-no-files-found: warn
+          # glibc, as opposed to the AppImage the Alpine job below builds.
+          name: ic-appimage-x86_64-glibc
+          path: src-tauri/target/release/bundle/appimage/*.AppImage
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: matrix.os == 'ubuntu-latest'
+        with:
+          name: ic-deb-x86_64
+          path: src-tauri/target/release/bundle/deb/*.deb
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: matrix.os == 'ubuntu-latest'
+        with:
+          name: ic-rpm-x86_64
+          path: src-tauri/target/release/bundle/rpm/*.rpm
+          if-no-files-found: error
+
+      # The runner is Apple silicon, and the .app this wraps is not uploaded
+      # separately: upload-artifact does not carry executable bits, so the
+      # image is the only form of it worth handing out.
+      - uses: actions/upload-artifact@v4
+        if: matrix.os == 'macos-latest'
+        with:
+          name: ic-dmg-aarch64
+          path: src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: matrix.os == 'windows-latest'
+        with:
+          name: ic-nsis-x86_64
+          path: src-tauri/target/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error
 
   package-musl-appimage:
     name: package (musl-x86_64 AppImage)
@@ -216,7 +252,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ic-musl-x86_64
+          name: ic-appimage-x86_64-musl
           path: src-tauri/target/release/bundle/appimage-musl/*.AppImage
           if-no-files-found: error
 
