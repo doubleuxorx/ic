@@ -1,6 +1,6 @@
 app-id: org.ic.canvas
 runtime: org.gnome.Platform
-runtime-version: "48"
+runtime-version: "50"
 sdk: org.gnome.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.node22
@@ -28,21 +28,13 @@ finish-args:
   # Workspaces on removable media are out of reach by design; granting
   # --filesystem=/run/media would widen the sandbox for an uncommon case.
 
-# WebKitGTK decodes media through GStreamer, and the GNOME runtime ships a
-# codec-restricted ffmpeg with no avdec_h264 or avdec_aac. Without this
-# extension the .mp4, .m4v, .mov and .m4a files that kinds.rs accepts fail to
-# play, while .webm, .ogg, .opus, .mp3, .wav and .flac work from the runtime.
-add-extensions:
-  org.freedesktop.Platform.ffmpeg-full:
-    directory: lib/ffmpeg
-    version: "24.08"
-    add-ld-path: .
-    no-autodownload: false
-    autodelete: false
-
-cleanup-commands:
-  # Mount point for the extension above; it must exist in the built app.
-  - mkdir -p /app/lib/ffmpeg
+# WebKitGTK decodes media through GStreamer, and the runtime's own ffmpeg still
+# omits avdec_h264, so the .mp4, .m4v and .mov files that kinds.rs accepts need
+# org.freedesktop.Platform.codecs-extra. On the 24.08 base this app declared the
+# equivalent (ffmpeg-full, now end-of-life) itself; from 25.08 the runtime
+# declares the extension point and pulls it in as a related ref, so there is
+# nothing to add here. Audio is unaffected either way: avdec_aac moved into the
+# runtime, and .webm, .ogg, .opus, .mp3, .wav and .flac always came from it.
 
 modules:
   - name: ic

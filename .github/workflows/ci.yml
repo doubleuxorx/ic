@@ -320,7 +320,7 @@ jobs:
     # unit. Budgeted like the Alpine AppImage job, which does the same work.
     timeout-minutes: 60
     container:
-      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-48
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
       options: --privileged
 
     steps:
@@ -349,7 +349,13 @@ jobs:
             test -f /app/share/metainfo/org.ic.canvas.metainfo.xml
           '
           flatpak info --show-metadata org.ic.canvas > metadata.txt
-          grep -q '^\[Extension org.freedesktop.Platform.ffmpeg-full\]$' metadata.txt
+          # H.264 lives in org.freedesktop.Platform.codecs-extra, which the
+          # runtime declares and pulls in for us. Check it on whichever runtime
+          # the bundle asks for, so a later runtime bump onto a base without
+          # that extension fails here instead of silently killing .mp4 playback.
+          runtime=$(sed -n 's/^runtime=//p' metadata.txt)
+          flatpak info --show-metadata "runtime/$runtime" \
+            | grep -q '^\[Extension org.freedesktop.Platform.codecs-extra\]$'
           if grep '^shared=' metadata.txt | grep -q network; then
             echo "::error::the bundle grants network access"
             exit 1
