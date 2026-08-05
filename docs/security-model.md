@@ -161,6 +161,27 @@ JavaScript, and there is no path to executing any: no remote scripts, no `eval`,
 a strict CSP, sanitized Markdown, no plugin runtime and no scripting engine.
 Revisit if a dependency ever gains a JS execution surface.
 
+## Patched dependency: `glib` 0.18.5
+
+RUSTSEC-2024-0429 (GHSA-wrw7-89jp-8q8g) reports unsoundness in
+`glib::VariantStrIter`: a C out-argument was passed as `&p` instead of `&mut p`,
+so optimizing builds of current rustc discard the write and the iterator then
+dereferences NULL. Reproduced here as a SIGSEGV on rustc 1.96.1 with the release
+profile.
+
+The advisory cannot be resolved by upgrading. Upstream fixed it in glib 0.20,
+but gtk3-rs never went past 0.18 and every WebKitGTK crate under Tauri —
+`gtk`, `gdk`, `webkit2gtk`, `tao`, `muda`, `wry` — pins glib 0.18. Tauri tracks
+this as an upstream problem and closed
+[tauri-apps/tauri#12048](https://github.com/tauri-apps/tauri/issues/12048) as
+not planned, pending its GTK 4 migration.
+
+Instead of accepting the advisory, `src-tauri/third_party/glib-0.18.5` vendors
+the published crate with the upstream one-line fix applied, wired in through
+`[patch.crates-io]`. Provenance, the exact diff and how to verify it are in
+`src-tauri/third_party/README.md`. Nothing in the dependency graph constructs a
+`VariantStrIter` today, so this closes a latent crash rather than a live one.
+
 ## Operational rules
 
 - Do not run the application as administrator or root.

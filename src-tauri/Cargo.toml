@@ -42,6 +42,20 @@ custom-protocol = ["tauri/custom-protocol"]
 [dev-dependencies]
 tempfile = "3"
 
+# glib 0.18.5 is unsound (RUSTSEC-2024-0429): VariantStrIter::impl_get passes a
+# C out-argument as `&p` instead of `&mut p`, so optimizing builds of recent
+# rustc discard the write and CStr::from_ptr then dereferences NULL. Upstream
+# only fixed it in glib 0.20, which this tree cannot reach: gtk3-rs stopped at
+# 0.18 and every WebKitGTK crate under Tauri pins glib 0.18. The vendored copy
+# is the published crate plus that one-line fix; see third_party/README.md.
+[patch.crates-io]
+glib = { path = "third_party/glib-0.18.5" }
+
+# The vendored crate is a patched dependency, not our code: keeping it out of
+# the workspace means cargo fmt, clippy and test never descend into it.
+[workspace]
+exclude = ["third_party/glib-0.18.5"]
+
 [profile.release]
 panic = "abort"
 codegen-units = 1
