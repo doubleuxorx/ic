@@ -81,6 +81,17 @@ for dlopened in libGLESv2.so.2 libGLESv1_CM.so.1; do
 	cp -aL "/usr/lib/$dlopened" "$appdir/usr/lib/$dlopened"
 done
 
+# Mesa reaches its drivers the same way, through a directory compiled into it,
+# which on any host but Alpine holds nothing it can use. Then it has no driver
+# at all: a virtio-gpu guest reports "virtio_gpu: driver missing", EGL falls
+# through every path it has, and the window stays white. Take the directory
+# whole — one library and the names each driver is looked up under, software
+# rasterizer included, so a host whose GPU this Mesa cannot drive still draws.
+# AppRun points Mesa at it, since the path it was built with is not this one.
+cp -a /usr/lib/dri "$appdir/usr/lib/dri"
+test -e "$appdir/usr/lib/dri/kms_swrast_dri.so"
+test -e "$appdir/usr/lib/dri/swrast_dri.so"
+
 # %F rather than %U: the application resolves its positional argument with
 # `canonicalize`, so it takes local paths and not file:// URIs.
 cat >"$appdir/usr/share/applications/ic.desktop" <<'DESKTOP'
@@ -197,6 +208,10 @@ app_run_env="$workdir/apprun-env.sh"
 cat >"$app_run_env" <<'APPRUN_ENV'
 export GTK_DATA_PREFIX="${HERE}/usr"
 
+# Mesa's drivers are in the bundle, not in the directory the copy of Mesa in
+# the bundle was compiled to look in.
+export LIBGL_DRIVERS_PATH="${HERE}/usr/lib/dri"
+
 # AppRun cd's into the bundle further down, so a relative path on the command
 # line would otherwise resolve against AppDir/usr. The AppImage runtime exports
 # the invocation directory as OWD, but only when it mounts the bundle with
@@ -234,7 +249,9 @@ install -m 0755 "$app_run_tmp" "$appdir/AppRun"
 # the bundle. go-appimage's default of "Default" needs theme files on disk.
 sed -i 's/export GTK_THEME=Default/export GTK_THEME=Adwaita/' "$appdir/AppRun"
 
-if ! grep -q 'GTK_DATA_PREFIX' "$appdir/AppRun" || ! grep -q 'export OWD' "$appdir/AppRun"; then
+if ! grep -q 'GTK_DATA_PREFIX' "$appdir/AppRun" ||
+	! grep -q 'export OWD' "$appdir/AppRun" ||
+	! grep -q 'LIBGL_DRIVERS_PATH' "$appdir/AppRun"; then
 	echo "error: AppRun environment block was not inserted; the generated" >&2
 	echo "       AppRun no longer has a line starting with HERE=" >&2
 	exit 1
@@ -368,6 +385,7 @@ loader="$appdir/lib/ld-musl-x86_64.so.1"
 test -x "$appdir/AppRun"
 test -e "$loader"
 test -e "$appdir/usr/lib/libGLESv2.so.2"
+test -e "$appdir/usr/lib/dri/swrast_dri.so"
 test -x "$appdir/usr/libexec/webkit2gtk-4.1/WebKitNetworkProcess"
 test -x "$appdir/usr/libexec/webkit2gtk-4.1/WebKitWebProcess"
 test -f "$appdir/usr/lib/webkit2gtk-4.1/injected-bundle/libwebkit2gtkinjectedbundle.so"
@@ -404,6 +422,7 @@ test -x "$extracted/usr/libexec/webkit2gtk-4.1/WebKitNetworkProcess"
 test -e "$extracted/usr/$bundled_interpreter"
 test -f "$extracted/usr/lib/webkit2gtk-4.1/injected-bundle/libwebkit2gtkinjectedbundle.so"
 test -f "$extracted/usr/lib/libGLESv2.so.2"
+test -e "$extracted/usr/lib/dri/swrast_dri.so"
 test -f "$extracted/usr/share/glib-2.0/schemas/gschemas.compiled"
 test -f "$extracted/usr/share/fonts/dejavu/DejaVuSans.ttf"
 test ! -L "$extracted/etc/fonts/fonts.conf"

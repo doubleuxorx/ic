@@ -21,6 +21,7 @@ RUN apk add --no-cache \
       libayatana-appindicator-dev \
       librsvg-dev \
       linux-headers \
+      mesa-dri-gallium \
       mesa-gles \
       nodejs \
       npm \
