@@ -139,8 +139,8 @@ jobs:
             src-tauri/target/release/bundle/**/*
           if-no-files-found: warn
 
-  package-alpine-appimage:
-    name: package (alpine-musl-x86_64 AppImage)
+  package-musl-appimage:
+    name: package (musl-x86_64 AppImage)
     needs: check
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
@@ -160,6 +160,10 @@ jobs:
       # toolchain dominates this job, so the image layers are cached.
       - name: Build Alpine AppImage builder
         uses: docker/build-push-action@v6
+        env:
+          # Otherwise every run leaves a *.dockerbuild build record next to the
+          # artifacts anyone downloading a release build has to pick through.
+          DOCKER_BUILD_RECORD_UPLOAD: false
         with:
           context: .
           file: .github/alpine-appimage.Dockerfile
@@ -212,7 +216,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ic-alpine-musl-x86_64
+          name: ic-musl-x86_64
           path: src-tauri/target/release/bundle/appimage-musl/*.AppImage
           if-no-files-found: error
 

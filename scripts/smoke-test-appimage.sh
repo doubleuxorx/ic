@@ -69,4 +69,14 @@ if grep -qi 'Fontconfig error\|no fonts configured' "$log"; then
 	exit 1
 fi
 
+# GLib logs at these levels for things the bundle got wrong but which do not
+# stop the window from appearing. A packaging step that damaged GTK's embedded
+# GResource is the case that matters: startup survives it, and only the widgets
+# built from a composite template, the file chooser included, are broken.
+if grep -q '\-CRITICAL \*\*\|\-ERROR \*\*' "$log"; then
+	echo "error: the bundle logged GLib criticals during startup" >&2
+	cat "$log" >&2
+	exit 1
+fi
+
 printf 'Smoke test passed for %s\n' "$appimage"

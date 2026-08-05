@@ -109,6 +109,77 @@ appimagetool="$tool_dir/squashfs-root/AppRun"
 
 "$appimagetool" -s deploy "$appdir/usr/share/applications/ic.desktop"
 
+# appimagetool gives every library it deploys a long RUNPATH, and patchelf makes
+# room for one by moving the sections at the start of the file to its end and
+# filling the bytes it vacates with 'Z'. Nothing adjusts the pointer through
+# which a static GResource is registered, so a library whose .gresource.*
+# section is moved this way hands GLib the filler and every lookup against it
+# fails. GTK keeps its composite templates in such a section, which is what
+# leaves GtkFileChooserDialog, the application's open dialog, unbuildable. Copy
+# each moved payload back to the offset the stale pointer still reads.
+build_id() {
+	readelf -nW "$1" | sed -n 's/.*Build ID: //p'
+}
+
+gresource_sections="$workdir/gresource-sections"
+gresource_payload="$workdir/gresource-payload.bin"
+command find "$appdir" -type f -print |
+	while IFS= read -r deployed; do
+		readelf -SW "$deployed" 2>/dev/null | awk -v lib="$deployed" '{
+			for (i = 1; i <= NF; i++)
+				if ($i ~ /^\.gresource/)
+					print lib, $i, $(i + 3), $(i + 4)
+		}'
+	done >"$gresource_sections"
+
+# Positive guard: the section this exists for has to be among the ones found.
+if ! awk '$2 == ".gresource.gtk" { found = 1 } END { exit !found }' "$gresource_sections"; then
+	echo "error: no deployed library carries GTK's GResource section" >&2
+	exit 1
+fi
+
+while read -r deployed section deployed_offset size; do
+	# Only the library as it was before appimagetool copied it records the
+	# offset the pointer refers to, so read that from the builder's own copy.
+	original="/usr/lib/$(basename "$deployed")"
+	if [ ! -e "$original" ]; then
+		echo "error: no builder copy of $(basename "$deployed") to read the" >&2
+		echo "       original offset of $section from" >&2
+		exit 1
+	fi
+	if [ "$(build_id "$deployed")" != "$(build_id "$original")" ]; then
+		echo "error: $original is not what was deployed as $deployed" >&2
+		exit 1
+	fi
+	original_offset="$(readelf -SW "$original" | awk -v section="$section" '{
+		for (i = 1; i <= NF; i++)
+			if ($i == section)
+				print $(i + 3)
+	}')"
+	if [ "$original_offset" = "$deployed_offset" ]; then
+		continue
+	fi
+
+	start="$((0x$original_offset))"
+	length="$((0x$size))"
+	filler="$(tail -c "+$((start + 1))" "$deployed" | head -c "$length" | tr -d 'Z' | wc -c)"
+	if [ "$filler" -ne 0 ]; then
+		echo "error: the bytes $section was moved away from are not patchelf" >&2
+		echo "       filler, so restoring it there would destroy something" >&2
+		exit 1
+	fi
+	objcopy -O binary --only-section="$section" "$deployed" "$gresource_payload"
+	dd if="$gresource_payload" of="$deployed" bs=1 seek="$start" conv=notrunc 2>/dev/null
+	if ! tail -c "+$((start + 1))" "$deployed" | head -c "$length" |
+		cmp -s - "$gresource_payload"; then
+		echo "error: $section was not restored to offset $original_offset of" >&2
+		echo "       $deployed" >&2
+		exit 1
+	fi
+	printf 'Restored %s at offset 0x%s of %s\n' \
+		"$section" "$original_offset" "$(basename "$deployed")"
+done <"$gresource_sections"
+
 # Environment the generated AppRun does not set up for us: GTK's prefix, the
 # invocation directory, and the GDK backend. Injected directly after AppRun
 # defines HERE, so it runs before anything else the template does.
