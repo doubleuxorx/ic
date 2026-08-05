@@ -181,8 +181,68 @@ fn parse_range(value: &str, total: u64) -> Option<(u64, u64)> {
     Some((start, end))
 }
 
+/// Whether a Linux run should ask WebKitGTK to paint in software.
+///
+/// True only for a bundle that borrows the host's graphics stack, which is the
+/// glibc AppImage: `linuxdeploy` deliberately leaves libEGL, libGL, libgbm and
+/// libdrm out of it, so the bundle's own GLib, GTK and WebKitGTK — all of them
+/// as old as the distribution CI builds on — meet whatever Mesa the host has.
+/// On a host far enough ahead that the two no longer compose, WebKitGTK does
+/// not degrade: it logs `Could not create default EGL display` and aborts the
+/// process that paints, which is what leaves an empty white window.
+///
+/// Nothing else here is exposed to that. The deb, the rpm and the Flatpak use
+/// the host's or the runtime's own WebKitGTK, and the musl AppImage carries a
+/// matching Mesa of its own — it has to, as the host's glibc build of Mesa
+/// cannot be loaded into a musl process at all.
+#[cfg(target_os = "linux")]
+fn wants_software_rendering(is_appimage: bool, gpu_override: Option<&str>) -> bool {
+    // The musl AppImage sets APPIMAGE too, and does not have the problem.
+    if cfg!(target_env = "musl") || !is_appimage {
+        return false;
+    }
+    // IC_WEBKIT_GPU=1 keeps acceleration on a host where it works, mirroring
+    // IC_GDK_BACKEND in the musl bundle's AppRun.
+    !matches!(gpu_override, Some(value) if !value.is_empty() && value != "0")
+}
+
+/// Applies [`wants_software_rendering`] to the environment WebKitGTK reads.
+///
+/// Both variables are needed: the first turns off the DMA-BUF renderer the UI
+/// and web processes share buffers through, the second stops the web process
+/// compositing at all. Either one alone still leaves a path that initializes
+/// EGL. A variable the caller already set is left alone, so a user debugging
+/// their own host keeps the last word.
+#[cfg(target_os = "linux")]
+fn prefer_software_rendering() {
+    use std::env;
+
+    // The AppImage runtime exports APPIMAGE for a bundle it mounted; AppRun
+    // exports APPDIR for itself either way, so the pair also covers a bundle
+    // run with --appimage-extract-and-run and an AppDir executed in place.
+    let is_appimage = env::var_os("APPIMAGE").is_some() || env::var_os("APPDIR").is_some();
+    let gpu_override = env::var("IC_WEBKIT_GPU").ok();
+    if !wants_software_rendering(is_appimage, gpu_override.as_deref()) {
+        return;
+    }
+
+    for variable in [
+        "WEBKIT_DISABLE_DMABUF_RENDERER",
+        "WEBKIT_DISABLE_COMPOSITING_MODE",
+    ] {
+        if env::var_os(variable).is_none() {
+            // Called before the builder below, so before GTK, WebKitGTK or any
+            // thread of ours exists.
+            env::set_var(variable, "1");
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    prefer_software_rendering();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(WorkspaceState::default())
@@ -234,6 +294,26 @@ mod tests {
         assert_eq!(parse_range("items=0-10", 1000), None);
         assert_eq!(parse_range("bytes=0-10,20-30", 1000), None);
         assert_eq!(parse_range("bytes=-", 1000), None);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn software_rendering_only_for_the_glibc_appimage() {
+        use super::wants_software_rendering;
+
+        // Held separately because the whole function is a no-op under musl.
+        if cfg!(target_env = "musl") {
+            assert!(!wants_software_rendering(true, None));
+            return;
+        }
+        assert!(wants_software_rendering(true, None));
+        // deb, rpm, Flatpak, a development build: host WebKitGTK, host Mesa.
+        assert!(!wants_software_rendering(false, None));
+        // Opted back into acceleration.
+        assert!(!wants_software_rendering(true, Some("1")));
+        // Neither of these asks for anything, so neither turns the fallback off.
+        assert!(wants_software_rendering(true, Some("0")));
+        assert!(wants_software_rendering(true, Some("")));
     }
 
     #[test]
