@@ -135,3 +135,129 @@ mod tests {
         assert!(!is_ignored(root, Path::new("/ws/Notes/A.md")));
     }
 }
+
+/// The watcher against a real directory, reporting to a real listener.
+///
+/// The rules above are about single events; these are about what the application
+/// is told, which is where a loop or a missed change actually shows up.
+#[cfg(test)]
+mod watching {
+    use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
+    use std::time::Duration;
+
+    use serde_json::json;
+    use tauri::Listener;
+
+    use crate::test_support::TestApp;
+
+    /// Long enough for the debounce plus a slow or busy machine.
+    const REPORTED: Duration = Duration::from_secs(10);
+    /// Long enough that an event which was going to arrive would have.
+    const QUIET: Duration = Duration::from_secs(2);
+
+    struct Changes {
+        events: Receiver<String>,
+    }
+
+    impl Changes {
+        fn of(app: &TestApp) -> Self {
+            let (sender, events) = channel();
+            app.app.listen("workspace:changed", move |event| {
+                let _ = sender.send(event.payload().to_string());
+            });
+            Changes { events }
+        }
+
+        fn next(&self) -> String {
+            self.events
+                .recv_timeout(REPORTED)
+                .expect("a change is reported")
+        }
+
+        /// Nothing at all is reported for as long as anything would have been.
+        fn nothing(&self) {
+            match self.events.recv_timeout(QUIET) {
+                Err(RecvTimeoutError::Timeout) => (),
+                Ok(payload) => panic!("reported {payload}"),
+                Err(other) => panic!("{other}"),
+            }
+        }
+
+        /// Wait until the watcher has stopped talking about earlier work.
+        fn settle(&self) {
+            while self.events.recv_timeout(Duration::from_secs(1)).is_ok() {}
+        }
+    }
+
+    #[test]
+    fn a_file_changed_outside_the_application_is_reported() {
+        let app = TestApp::opened();
+        let changes = Changes::of(&app);
+
+        std::fs::write(app.path("Notes/note.md"), b"# Changed elsewhere\n").unwrap();
+        assert!(changes.next().contains("Notes/note.md"));
+    }
+
+    #[test]
+    fn a_new_file_and_a_deleted_one_are_both_reported() {
+        let app = TestApp::opened();
+        let changes = Changes::of(&app);
+
+        std::fs::write(app.path("Notes/added.md"), b"# Added\n").unwrap();
+        assert!(changes.next().contains("Notes/added.md"));
+
+        changes.settle();
+        std::fs::remove_file(app.path("Notes/added.md")).unwrap();
+        assert!(changes.next().contains("Notes/added.md"));
+    }
+
+    /// The loop this guards against: the inotify backend reports opens as well as
+    /// writes, so a file the application read itself came back as changed, and
+    /// re-reading it to answer that reported it again, forever.
+    #[test]
+    fn reading_a_file_through_a_command_is_not_a_change() {
+        let app = TestApp::opened();
+        let changes = Changes::of(&app);
+        changes.settle();
+
+        for _ in 0..3 {
+            app.call("document_read", json!({ "relativePath": "Notes/note.md" }));
+            app.call("file_facts", json!({ "relativePath": "Notes/note.md" }));
+            app.call(
+                "media_probe",
+                json!({ "relativePath": "Attachments/tiny.mp3" }),
+            );
+        }
+        changes.nothing();
+    }
+
+    /// Caches and settings are the application's own business, and reporting them
+    /// would make every thumbnail look like an edit by the user.
+    #[test]
+    fn the_applications_own_state_is_not_a_change() {
+        let app = TestApp::opened();
+        let changes = Changes::of(&app);
+        changes.settle();
+
+        app.call(
+            "thumbnail_request",
+            json!({ "relativePath": "Attachments/wide.png" }),
+        );
+        app.call(
+            "workspace_settings_write",
+            json!({ "settings": {
+                "lastCanvas": "Canvases/Main.canvas", "viewports": {},
+                "authorizedExternalPaths": [], "ui": {},
+            }}),
+        );
+        app.call(
+            "recovery_write",
+            json!({
+                "relativePath": "Notes/note.md",
+                "contents": "# Draft\n",
+                "baseRevision": "",
+            }),
+        );
+        changes.nothing();
+    }
+}

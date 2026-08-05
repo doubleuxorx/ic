@@ -43,6 +43,10 @@ custom-protocol = ["tauri/custom-protocol"]
 
 [dev-dependencies]
 tempfile = "3"
+# Tauri's mock runtime, which builds the real application — commands, protocol
+# handler and state — with no window and no display, so `cargo test` covers the
+# privileged surface on a machine with no graphics stack at all.
+tauri = { version = "2", features = ["test"] }
 
 # glib 0.18.5 is unsound (RUSTSEC-2024-0429): VariantStrIter::impl_get passes a
 # C out-argument as `&p` instead of `&mut p`, so optimizing builds of recent
