@@ -1,14 +1,13 @@
-# Pinned by digest: the bundle ships whatever WebKitGTK and musl the builder
-# has, so an unpinned base would silently change what users get and make an
-# artifact impossible to reproduce. alpine:3.24 as of 2026-08-04.
+# Pinned by digest: the application is linked against whatever WebKitGTK and
+# musl the builder has, so an unpinned base would silently change which hosts
+# the result runs on and make an artifact impossible to reproduce. alpine:3.24
+# as of 2026-08-04.
 FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
 
 # Keep the build native to musl. In particular, do not add gcompat: the
 # AppImage tool used by scripts/build-musl-appimage.sh is statically linked.
-# font-dejavu and icu-data-full are bundled into the AppDir, not just used at
-# build time. icu-data-full is named rather than left to icu-libs, which is
-# satisfied by icu-data-en as well and would put a fraction of the locales in
-# the bundle depending on how apk resolved it that day.
+# Everything here is used at build time only; the bundle carries nothing from
+# this image but the application binary.
 RUN apk add --no-cache \
       build-base \
       ca-certificates \
@@ -18,17 +17,14 @@ RUN apk add --no-cache \
       desktop-file-utils \
       file \
       findutils \
-      font-dejavu \
       git \
       grep \
-      icu-data-full \
       libayatana-appindicator-dev \
       librsvg-dev \
       linux-headers \
       nodejs \
       npm \
       openssl-dev \
-      patchelf \
       pkgconf \
       sed \
       squashfs-tools \

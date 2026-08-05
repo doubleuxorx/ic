@@ -206,7 +206,7 @@ jobs:
       # that looks like a desktop rather than a bare container: this AppImage is
       # meant to borrow the host's graphics stack, so it is given the same
       # libraries the deb installs against, and Mesa to draw through.
-      - name: Smoke test the AppImage on a newer distribution
+      - name: Test the AppImage on a newer distribution
         if: matrix.os == 'ubuntu-latest'
         env:
           NEWER_UBUNTU_IMAGE: ubuntu:26.04@sha256:678c6550cc43645e08669028bc177f50be4e7c5b8cca677067b1914d4afc7a03
@@ -220,7 +220,7 @@ jobs:
               apt-get install -y --no-install-recommends xvfb xauth procps \
                 fonts-dejavu-core libwebkit2gtk-4.1-0 libegl-mesa0 \
                 libgl1-mesa-dri libglx-mesa0 >/dev/null &&
-              exec /workspace/scripts/smoke-test-appimage.sh \
+              exec /workspace/scripts/test-appimage.sh \
                 /workspace/src-tauri/target/release/bundle/appimage/ic-*.AppImage'
 
       - name: Name the disk image consistently
@@ -343,18 +343,24 @@ jobs:
         if: always()
         run: sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" "$MUSL_CARGO_HOME"
 
-      # A bare Alpine image with nothing but xvfb: no GTK, no WebKitGTK, none of
-      # the builder's libraries. A bundle that is not self-contained, or whose
-      # AppRun or WebKitGTK path rewriting silently did not apply, fails here
-      # rather than on a user's machine.
-      - name: Smoke test AppImage
+      # An Alpine image holding exactly what this bundle expects of a host and
+      # nothing else, so the list below is also the list of runtime packages,
+      # checked on every run. It is deliberately not the builder image: that one
+      # has the -dev packages and everything they pull in, and a bundle that
+      # needs one of those would pass there and fail on a user's machine.
+      - name: Test AppImage
         run: |
           docker run --rm --platform linux/amd64 \
             --volume "$GITHUB_WORKSPACE:/workspace:ro" \
             --workdir /tmp \
             "$ALPINE_IMAGE" \
-            /bin/sh -c 'apk add --no-cache xvfb-run >/dev/null &&
-              exec /workspace/scripts/smoke-test-appimage.sh \
+            /bin/sh -c 'apk add --no-cache \
+                font-dejavu \
+                gtk+3.0 \
+                mesa-dri-gallium \
+                webkit2gtk-4.1 \
+                xvfb-run >/dev/null &&
+              exec /workspace/scripts/test-appimage.sh \
                 /workspace/src-tauri/target/release/bundle/appimage-musl/ic-*.AppImage'
 
       - uses: actions/upload-artifact@v4
@@ -413,7 +419,7 @@ jobs:
       # The bundle is only ever installed from, so check it the way a user gets
       # it: every library resolvable against the plain runtime, the exported
       # files present, and no network permission smuggled into the metadata.
-      - name: Smoke test bundle
+      - name: Test bundle
         run: |
           flatpak install --user --noninteractive --no-related --bundle ic.flatpak
           flatpak run --user --command=sh org.ic.canvas -c '

@@ -13,10 +13,10 @@ if [ ! -x "$appimage" ]; then
 	exit 2
 fi
 
-timeout_seconds="${IC_SMOKE_TIMEOUT:-90}"
+timeout_seconds="${IC_TEST_TIMEOUT:-90}"
 # Long enough to cover several restarts: WebKitGTK replaced a web process that
 # aborted on startup about every four seconds.
-settle_seconds="${IC_SMOKE_SETTLE:-12}"
+settle_seconds="${IC_TEST_SETTLE:-12}"
 
 workdir="$(mktemp -d)"
 cleanup() {
@@ -102,10 +102,10 @@ fi
 # stop the window from appearing. A packaging step that damaged GTK's embedded
 # GResource is the case that matters: startup survives it, and only the widgets
 # built from a composite template, the file chooser included, are broken.
-if grep -q '\-CRITICAL \*\*\|\-ERROR \*\*' "$log"; then
+if grep -q -e '-CRITICAL \*\*' -e '-ERROR \*\*' "$log"; then
 	echo "error: the bundle logged GLib criticals during startup" >&2
 	cat "$log" >&2
 	exit 1
 fi
 
-printf 'Smoke test passed for %s\n' "$appimage"
+printf 'Tested %s\n' "$appimage"
