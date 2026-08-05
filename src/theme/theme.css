@@ -209,8 +209,16 @@ body {
   stroke-width: 2;
 }
 
+/* Above its own line. React Flow raises a selected edge by 1000, and the label
+   renderer it draws into carries no z-index of its own, so both end up in the
+   same stacking context and the line wins: it is painted across the label and
+   takes the clicks aimed at it. Nodes stay near zero here because
+   `elevateNodesOnSelect` is off, so this clears the edge without burying them
+   under every label. */
 .edge-label {
   position: absolute;
+  z-index: 1100;
+  cursor: text;
   padding: 1px 6px;
   border-radius: 4px;
   background: var(--surface);

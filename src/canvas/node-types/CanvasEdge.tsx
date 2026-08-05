@@ -69,7 +69,10 @@ const CanvasEdgeComponent = ({
               ...(color ? { borderColor: color } : {}),
               ...(!edge?.label && !editing ? { opacity: 0.35 } : {}),
             }}
-            onDoubleClick={(event) => {
+            // A single click, not a double one. The chip is only on screen
+            // when the edge is selected or already carries text, so a click on
+            // it can mean nothing except "edit this label".
+            onClick={(event) => {
               event.stopPropagation();
               setDraft(edge?.label ?? '');
               setEditing(true);
