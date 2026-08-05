@@ -31,7 +31,7 @@ appimagetool_sha256="376998aba63bb3a35a02ea3196f77268f8543a35a3b6b7db0dc21813651
 
 version="$(node -p "require('./src-tauri/tauri.conf.json').version")"
 output_dir="$repo_root/src-tauri/target/release/bundle/appimage-musl"
-artifact="$output_dir/ic_${version}_musl-x86_64.AppImage"
+artifact="$output_dir/ic-${version}-x86_64-musl.AppImage"
 
 workdir="$(mktemp -d)"
 cleanup() {

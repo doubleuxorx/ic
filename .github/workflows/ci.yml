@@ -132,6 +132,38 @@ jobs:
       - name: Build installers
         run: npx tauri build
 
+      # Tauri follows each format's own convention: underscores and amd64 for
+      # the deb, x64 for the installer, a release number and a dotted
+      # architecture for the rpm. Give every download the same shape instead,
+      # ic-<version>-<arch>[-<libc>].<ext>, with the libc only where it is what
+      # tells the two AppImages apart. Naming each file rather than globbing
+      # means a bundler that changes what it emits fails the job here.
+      - name: Name the Linux packages consistently
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          version="$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          cd src-tauri/target/release/bundle
+          mv "appimage/ic_${version}_amd64.AppImage" \
+            "appimage/ic-${version}-x86_64-glibc.AppImage"
+          mv "deb/ic_${version}_amd64.deb" "deb/ic-${version}-x86_64.deb"
+          mv rpm/ic-"${version}"-*.x86_64.rpm "rpm/ic-${version}-x86_64.rpm"
+
+      - name: Name the disk image consistently
+        if: matrix.os == 'macos-latest'
+        run: |
+          version="$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          cd src-tauri/target/release/bundle
+          mv "dmg/ic_${version}_aarch64.dmg" "dmg/ic-${version}-aarch64.dmg"
+
+      - name: Name the installer consistently
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          version="$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          cd src-tauri/target/release/bundle
+          mv "nsis/ic_${version}_x64-setup.exe" \
+            "nsis/ic-${version}-x86_64-setup.exe"
+
       # One artifact per installer rather than one per runner, named for what
       # comes out of it. Each names its format's directory instead of globbing
       # the whole bundle tree, so a target that silently stops being built
@@ -248,7 +280,7 @@ jobs:
             "$ALPINE_IMAGE" \
             /bin/sh -c 'apk add --no-cache xvfb-run >/dev/null &&
               exec /workspace/scripts/smoke-test-appimage.sh \
-                /workspace/src-tauri/target/release/bundle/appimage-musl/ic_*.AppImage'
+                /workspace/src-tauri/target/release/bundle/appimage-musl/ic-*.AppImage'
 
       - uses: actions/upload-artifact@v4
         with:
