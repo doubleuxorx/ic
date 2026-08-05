@@ -5,10 +5,9 @@
  * produced here is ever written back into a `.canvas` file.
  */
 
-import { MarkerType, type Edge, type EdgeMarker, type Node } from '@xyflow/react';
+import { type Edge, type Node } from '@xyflow/react';
 
 import type { CanvasDocument, CanvasEdge, CanvasNode, NodeSide } from '@/shared/json-canvas';
-import { resolveColor } from '@/theme/theme-store';
 
 export interface FlowNodeData extends Record<string, unknown> {
   node: CanvasNode;
@@ -72,19 +71,8 @@ export const inferSides = (
 };
 
 /** `toEnd` defaults to an arrow, `fromEnd` to nothing, per the specification. */
-const marker = (
-  end: CanvasEdge['toEnd'],
-  fallback: 'none' | 'arrow',
-  color: string | null,
-): EdgeMarker | undefined =>
-  (end ?? fallback) === 'arrow'
-    ? {
-        type: MarkerType.ArrowClosed,
-        width: 16,
-        height: 16,
-        color: color ?? 'var(--edge)',
-      }
-    : undefined;
+export const hasArrow = (end: CanvasEdge['toEnd'], fallback: 'none' | 'arrow'): boolean =>
+  (end ?? fallback) === 'arrow';
 
 export const toFlowEdges = (document: CanvasDocument): FlowEdge[] => {
   const byId = new Map(document.nodes.map((node) => [node.id, node]));
@@ -94,9 +82,6 @@ export const toFlowEdges = (document: CanvasDocument): FlowEdge[] => {
     const to = byId.get(edge.toNode);
     if (!from || !to) continue;
     const inferred = inferSides(from, to);
-    const color = resolveColor(edge.color);
-    const markerStart = marker(edge.fromEnd, 'none', color);
-    const markerEnd = marker(edge.toEnd, 'arrow', color);
     edges.push({
       id: edge.id,
       source: edge.fromNode,
@@ -107,8 +92,6 @@ export const toFlowEdges = (document: CanvasDocument): FlowEdge[] => {
       selected: false,
       data: { edge },
       zIndex: 1,
-      ...(markerStart ? { markerStart } : {}),
-      ...(markerEnd ? { markerEnd } : {}),
     });
   }
   return edges;

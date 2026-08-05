@@ -194,6 +194,21 @@ body {
   right: -5px;
 }
 
+/* Two strokes meeting at a point, at a weight just above the line's own, so the
+   head reads as the end of the stroke rather than a mark laid over it. A
+   coloured edge sets its own stroke inline. */
+.edge-arrow {
+  fill: none;
+  stroke: var(--edge);
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.react-flow__edge.selected .edge-arrow {
+  stroke: var(--edge-selected);
+}
+
 .react-flow__edge-path {
   stroke: var(--edge);
   stroke-width: 1.75;
