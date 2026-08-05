@@ -6,13 +6,17 @@
  * later, from an event handler or a promise nobody awaited. Both are reported
  * through the shared overlay. It is a module rather than an inline script so
  * the content security policy needs no `unsafe-inline` for scripts.
+ *
+ * Not every window error event is a failure: the one browsers raise for
+ * undelivered resize observations is filtered out here.
  */
 
-import { describeError, reportFatal } from '@/shared/fatal';
+import { describeError, isResizeObserverNotice, reportFatal } from '@/shared/fatal';
 
 window.addEventListener(
   'error',
   (event) => {
+    if (isResizeObserverNotice(event)) return;
     const source = event.filename ? `\n\n${event.filename}:${event.lineno}` : '';
     reportFatal(`${describeError(event.error ?? event.message)}${source}`);
   },
