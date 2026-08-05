@@ -132,6 +132,56 @@ jobs:
       - name: Build installers
         run: npx tauri build
 
+      # linuxdeploy deploys the runner's Wayland libraries into the AppDir, and
+      # they win the lookup over the ones on the machine the bundle runs on.
+      # Ubuntu 26.04's libEGL_mesa.so.0 needs three symbols that the 24.04 the
+      # runner builds on does not have — wl_fixes_interface,
+      # wl_display_create_queue_with_name and wl_display_dispatch_queue_timeout,
+      # all added after wayland 1.22 — so the host's EGL vendor library fails to
+      # load, WebKitGTK gets no display, and the application aborts on an empty
+      # white window before it paints anything. Nothing in the bundle needs its
+      # own copy: any host that can show a window has a Wayland client library,
+      # and on X11 none of it is used at all. So drop them and pack the AppDir
+      # again, over the AppImage that was just built from it.
+      - name: Repack the AppImage without the runner's Wayland libraries
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          version="$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          cd src-tauri/target/release/bundle/appimage
+          test -d ic.AppDir
+          if ! find ic.AppDir/usr/lib -maxdepth 1 -name 'libwayland-*.so.*' |
+            grep -q .; then
+            echo "::error::the AppDir carries no Wayland libraries; linuxdeploy" \
+              "no longer deploys them and this step has become dead weight"
+            exit 1
+          fi
+          find ic.AppDir/usr/lib -maxdepth 1 -name 'libwayland-*.so.*' -delete
+          # Wherever the bundler put the tool it packed the AppDir with.
+          # Either path may not exist, which find reports as a failure even
+          # when the other one held the tool.
+          tool="$(find . "$HOME/.cache/tauri" -maxdepth 2 \
+            -name 'linuxdeploy-plugin-appimage*.AppImage' -print -quit \
+            2>/dev/null || true)"
+          if [ -z "$tool" ]; then
+            echo "::error::linuxdeploy's AppImage plugin is not where the" \
+              "bundler left it, so the AppDir cannot be packed again"
+            exit 1
+          fi
+          chmod +x "$tool"
+          rm -f "ic_${version}_amd64.AppImage"
+          # The runners have no FUSE, so every AppImage here runs by extraction.
+          APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 VERSION="$version" \
+            OUTPUT="ic_${version}_amd64.AppImage" "$tool" --appdir ic.AppDir
+          test -f "ic_${version}_amd64.AppImage"
+          # What ships is the bundle, not the directory it was made from.
+          APPIMAGE_EXTRACT_AND_RUN=1 "./ic_${version}_amd64.AppImage" \
+            --appimage-extract >/dev/null
+          if find squashfs-root -name 'libwayland-*.so.*' | grep -q .; then
+            echo "::error::the packed AppImage still carries Wayland libraries"
+            exit 1
+          fi
+          rm -rf squashfs-root
+
       # Tauri follows each format's own convention: underscores and amd64 for
       # the deb, x64 for the installer, a release number and a dotted
       # architecture for the rpm. Give every download the same shape instead,
@@ -147,6 +197,29 @@ jobs:
             "appimage/ic-${version}-x86_64-glibc.AppImage"
           mv "deb/ic_${version}_amd64.deb" "deb/ic-${version}-x86_64.deb"
           mv rpm/ic-"${version}"-*.x86_64.rpm "rpm/ic-${version}-x86_64.rpm"
+
+      # The runner is the distribution this was built on, where a bundle that
+      # shadows a host library shadows it with the same version and nothing goes
+      # wrong. Run it on a newer one instead, which is where the Wayland
+      # libraries above turned an empty white window into the only thing users
+      # of 26.04 ever saw. Only the libraries the bundle deliberately leaves to
+      # the host are installed, so anything else it forgot fails here too.
+      - name: Smoke test the AppImage on a newer distribution
+        if: matrix.os == 'ubuntu-latest'
+        env:
+          NEWER_UBUNTU_IMAGE: ubuntu:26.04@sha256:678c6550cc43645e08669028bc177f50be4e7c5b8cca677067b1914d4afc7a03
+        run: |
+          docker run --rm --platform linux/amd64 \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            --workdir /tmp \
+            "$NEWER_UBUNTU_IMAGE" \
+            /bin/sh -c 'export DEBIAN_FRONTEND=noninteractive &&
+              apt-get update >/dev/null &&
+              apt-get install -y --no-install-recommends xvfb procps \
+                fonts-dejavu-core libegl1 libegl-mesa0 libgl1 libgl1-mesa-dri \
+                libglx-mesa0 >/dev/null &&
+              exec /workspace/scripts/smoke-test-appimage.sh \
+                /workspace/src-tauri/target/release/bundle/appimage/ic-*.AppImage'
 
       - name: Name the disk image consistently
         if: matrix.os == 'macos-latest'
