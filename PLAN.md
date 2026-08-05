@@ -923,7 +923,7 @@ Build and test on:
 * Undo/redo tests
 * Theme screenshot tests
 * Keyboard interaction tests
-* Cross-platform smoke tests
+* Cross-platform startup tests
 
 ### Release requirements
 

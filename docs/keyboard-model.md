@@ -104,7 +104,7 @@ rather than the browser Fullscreen API, so the webview cannot trap it.
 
 ## Cross-platform status
 
-Verified on Linux (X11, WebKitGTK 2.48) with the automated smoke run described
+Verified on Linux (X11, WebKitGTK 2.48) with the automated run described
 in `README.md`. Windows (WebView2), macOS (WKWebView) and Wayland still need the
 manual pass listed in the plan's Milestone 0 exit criteria, in particular
 `Escape` ordering under each window manager. If native fullscreen consumes
