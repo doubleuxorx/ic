@@ -202,8 +202,10 @@ jobs:
       # shadows a host library shadows it with the same version and nothing goes
       # wrong. Run it on a newer one instead, which is where the Wayland
       # libraries above turned an empty white window into the only thing users
-      # of 26.04 ever saw. Only the libraries the bundle deliberately leaves to
-      # the host are installed, so anything else it forgot fails here too.
+      # of 26.04 ever saw. Unlike the musl bundle's test, this one wants a host
+      # that looks like a desktop rather than a bare container: this AppImage is
+      # meant to borrow the host's graphics stack, so it is given the same
+      # libraries the deb installs against, and Mesa to draw through.
       - name: Smoke test the AppImage on a newer distribution
         if: matrix.os == 'ubuntu-latest'
         env:
@@ -215,9 +217,9 @@ jobs:
             "$NEWER_UBUNTU_IMAGE" \
             /bin/sh -c 'export DEBIAN_FRONTEND=noninteractive &&
               apt-get update >/dev/null &&
-              apt-get install -y --no-install-recommends xvfb procps \
-                fonts-dejavu-core libegl1 libegl-mesa0 libgl1 libgl1-mesa-dri \
-                libglx-mesa0 >/dev/null &&
+              apt-get install -y --no-install-recommends xvfb xauth procps \
+                fonts-dejavu-core libwebkit2gtk-4.1-0 libegl-mesa0 \
+                libgl1-mesa-dri libglx-mesa0 >/dev/null &&
               exec /workspace/scripts/smoke-test-appimage.sh \
                 /workspace/src-tauri/target/release/bundle/appimage/ic-*.AppImage'
 
@@ -370,7 +372,7 @@ jobs:
             "$DEBIAN_IMAGE" \
             /bin/sh -c 'apt-get update >/dev/null &&
               DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-                xvfb procps >/dev/null &&
+                xvfb xauth procps >/dev/null &&
               test ! -e /lib/ld-musl-x86_64.so.1 &&
               exec /workspace/scripts/smoke-test-appimage.sh \
                 /workspace/src-tauri/target/release/bundle/appimage-musl/ic-*.AppImage'
