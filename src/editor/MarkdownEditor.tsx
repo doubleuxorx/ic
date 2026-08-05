@@ -9,13 +9,14 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
-import { markdown } from '@codemirror/lang-markdown';
+import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 import { Compartment, EditorState } from '@codemirror/state';
 import { EditorView, keymap, drawSelection, highlightActiveLine } from '@codemirror/view';
 
 import { createEchoGuard, noteLocalEdit, shouldAdopt } from './echo-guard';
 import { useEditorSettings } from './editor-settings';
+import { livePreview } from './live-preview';
 import { viLite, viMode, type ViMode } from './vi-mode';
 
 interface Props {
@@ -28,6 +29,7 @@ interface Props {
 }
 
 const viCompartment = new Compartment();
+const previewCompartment = new Compartment();
 
 export const MarkdownEditor = ({ value, onChange, onExit, onSave, autoFocus = true }: Props) => {
   const host = useRef<HTMLDivElement | null>(null);
@@ -35,6 +37,7 @@ export const MarkdownEditor = ({ value, onChange, onExit, onSave, autoFocus = tr
   const echoes = useRef(createEchoGuard()).current;
   const [mode, setMode] = useState<ViMode>('insert');
   const viEnabled = useEditorSettings((state) => state.viEnabled);
+  const preview = useEditorSettings((state) => state.livePreview);
 
   useEffect(() => {
     if (!host.current) return undefined;
@@ -43,9 +46,13 @@ export const MarkdownEditor = ({ value, onChange, onExit, onSave, autoFocus = tr
       doc: value,
       extensions: [
         history(),
-        drawSelection(),
+        // A steady cursor: the block cursor is a solid shape over a character,
+        // and blinking it makes that character flicker in and out of legibility.
+        drawSelection({ cursorBlinkRate: 0 }),
         highlightActiveLine(),
-        markdown(),
+        // The GFM base, not the CommonMark default: `markdown-it` renders
+        // strikethrough and tables, so the editor has to recognise them too.
+        markdown({ base: markdownLanguage }),
         syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
         EditorView.lineWrapping,
         keymap.of([
@@ -76,6 +83,7 @@ export const MarkdownEditor = ({ value, onChange, onExit, onSave, autoFocus = tr
           ...defaultKeymap,
         ]),
         viCompartment.of(useEditorSettings.getState().viEnabled ? viLite() : []),
+        previewCompartment.of(useEditorSettings.getState().livePreview ? livePreview() : []),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             noteLocalEdit(echoes);
@@ -106,6 +114,13 @@ export const MarkdownEditor = ({ value, onChange, onExit, onSave, autoFocus = tr
       effects: viCompartment.reconfigure(viEnabled ? viLite() : []),
     });
   }, [viEnabled]);
+
+  // Likewise for live preview: only the decorations change, never the text.
+  useEffect(() => {
+    view.current?.dispatch({
+      effects: previewCompartment.reconfigure(preview ? livePreview() : []),
+    });
+  }, [preview]);
 
   // Adopt external edits without disturbing an in-progress local edit.
   useEffect(() => {

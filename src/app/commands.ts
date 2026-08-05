@@ -745,6 +745,17 @@ const commands: AppCommand[] = [
     },
   },
   {
+    id: 'editor.toggleLivePreview',
+    title: 'Toggle editor live preview',
+    category: 'Settings',
+    aliases: ['markdown', 'syntax', 'wysiwyg'],
+    isAvailable: () => true,
+    execute: () => {
+      useEditorSettings.getState().toggleLivePreview();
+      toast(`Live preview ${useEditorSettings.getState().livePreview ? 'enabled' : 'disabled'}`);
+    },
+  },
+  {
     id: 'settings.open',
     title: 'Open settings',
     category: 'Settings',

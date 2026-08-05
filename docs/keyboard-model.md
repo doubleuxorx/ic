@@ -49,7 +49,8 @@ the native event too and CodeMirror, further down the tree, never sees the key.
 
 Everything else — new canvas, new note, add text box, add group, add file, add
 link, import file, colours, z-order, open externally, reveal in file manager,
-Vi mode, settings — is in the palette. There are no menus and no toolbar.
+Vi mode, live preview, settings — is in the palette. There are no menus and no
+toolbar.
 
 ## Canvas keys
 
@@ -58,11 +59,38 @@ Vi mode, settings — is in the palette. There are no menus and no toolbar.
 | `Enter` | Edit the selected node |
 | `Escape` | Leave the editor, then clear the selection |
 | `Delete` / `Backspace` | Delete selected nodes and edges |
+| Click empty canvas | Leave the editor |
 | Drag on empty canvas | Rubber-band selection |
 | Middle or right drag | Pan |
 | Scroll | Pan; pinch or `Mod`+scroll zooms |
 | Hover a node | Connection dots appear centred on each side |
 | Drag a dot | Create an edge |
+
+## Live preview
+
+On by default, toggled by `Toggle editor live preview`. Like Vi Lite it lives in
+a CodeMirror compartment, so switching it reconfigures decorations only and the
+document is untouched.
+
+Markdown syntax — `#`, `**`, backticks, link brackets and addresses, `>` — is
+hidden on every line the selection does not touch. The line under the cursor
+shows its raw source, so editing is never done blind, and a selection spanning
+several lines reveals all of them.
+
+The revealed line is set in the monospace face, because at that moment it is
+source rather than prose. Only the family changes, not the size, so the line
+keeps its height and nothing below it moves.
+
+Styling is applied to every line including the active one, so moving the cursor
+changes which markers are visible but never a line's height.
+
+Because markers are never hidden on the cursor's line, no cursor position is
+ever inside hidden text. Motion, selection, copy and undo therefore behave
+exactly as they do on plain source, and nothing needs to be atomic.
+
+Images, tables and fenced code stay as Markdown. Showing them otherwise means
+replacing a block with rendered HTML, which is a separate feature — the
+read-only preview shown when a node is not being edited already does that.
 
 ## Vi Lite
 
@@ -97,6 +125,8 @@ configuration files and plugins are deliberately not implemented.
   not close the editor or leave fullscreen.
 - In normal mode, `Escape` passes through, so a second press leaves the editor.
 - With no editor focused, `Escape` clears the active node, then the selection.
+- Clicking the canvas outside the node leaves the editor too, which is why an
+  active node carries no button for it.
 
 `Escape` is never the only way out of fullscreen. `Mod+Shift+F` toggles it, and
 `Toggle fullscreen` is in the palette. Fullscreen uses the native window API

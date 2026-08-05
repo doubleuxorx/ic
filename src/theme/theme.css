@@ -546,9 +546,110 @@ body {
   outline: none;
 }
 
-/* Vi normal mode uses a block cursor. */
+/* ------------------------------------------------------ editor live preview */
+
+/* Prose reads better proportionally; plain source editing keeps the mono face.
+   Anything that is still literally code stays monospace below. */
+.cm-editor.md-live .cm-scroller {
+  font-family: var(--font-ui);
+  font-size: 13.5px;
+}
+
+/* The line under the cursor is showing its Markdown source, so it is set as
+   source: monospace, upright, regular weight. Dropping the slant and the weight
+   is also what lets the Vi block cursor sit flush — italic and bold glyphs
+   overhang their character cell, and a rectangle one cell wide cannot cover
+   ink that leans outside it.
+
+   Only the face changes, never the size, and in a monospace family the advance
+   is the same at every style and weight, so nothing reflows in either
+   direction. */
+.cm-editor.md-live .cm-md-source,
+.cm-editor.md-live .cm-md-source span {
+  font-family: var(--font-mono);
+  font-style: normal;
+  font-weight: normal;
+}
+
+.cm-editor .cm-md-h1,
+.cm-editor .cm-md-h2,
+.cm-editor .cm-md-h3,
+.cm-editor .cm-md-h4,
+.cm-editor .cm-md-h5,
+.cm-editor .cm-md-h6 {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+/* `defaultHighlightStyle` underlines headings. At body size that passes as
+   syntax highlighting; at preview size it reads as a rule drawn across the
+   card. The reset has to land on the highlighted spans themselves, because a
+   decoration cannot be cancelled from an ancestor. */
+.cm-editor.md-live .cm-md-h1 span,
+.cm-editor.md-live .cm-md-h2 span,
+.cm-editor.md-live .cm-md-h3 span,
+.cm-editor.md-live .cm-md-h4 span,
+.cm-editor.md-live .cm-md-h5 span,
+.cm-editor.md-live .cm-md-h6 span {
+  text-decoration: none;
+}
+
+.cm-editor .cm-md-h1 {
+  font-size: 1.5em;
+}
+.cm-editor .cm-md-h2 {
+  font-size: 1.3em;
+}
+.cm-editor .cm-md-h3 {
+  font-size: 1.15em;
+}
+
+.cm-editor .cm-md-strong {
+  font-weight: 680;
+}
+
+.cm-editor .cm-md-em {
+  font-style: italic;
+}
+
+.cm-editor .cm-md-strike {
+  text-decoration: line-through;
+  color: var(--text-secondary);
+}
+
+.cm-editor .cm-md-code {
+  font-family: var(--font-mono);
+  background: var(--surface-sunken);
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+/* Underlined but not coloured as an affordance: links in the editor are text
+   being edited, not something to activate. Opening one is the preview's job. */
+.cm-editor .cm-md-link {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.cm-editor .cm-md-list-mark,
+.cm-editor .cm-md-hr {
+  color: var(--text-muted);
+}
+
+.cm-editor .cm-md-quote {
+  color: var(--text-secondary);
+}
+
+.cm-editor .cm-md-quote-line {
+  border-left: 3px solid var(--border);
+  padding-left: 7px;
+}
+
+/* Vi normal mode uses a block cursor. Its width is measured per character and
+   published by the extension, so the `em` applies only in the moment before the
+   first measurement lands. */
 .cm-editor.vi-normal .cm-cursor {
-  border-left-width: 0.6em;
+  border-left-width: var(--vi-cursor-width, 0.6em);
   border-left-color: color-mix(in srgb, var(--accent) 60%, transparent);
 }
 

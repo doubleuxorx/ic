@@ -97,9 +97,7 @@ const FileNodeComponent = ({ id, data, selected }: NodeProps<FlowNode>) => {
         </>
       }
       actions={
-        active ? (
-          <NodeAction icon="close" title="Done (Escape)" onClick={() => setActiveNode(null)} />
-        ) : (
+        active ? null : (
           <>
             <NodeAction icon="edit" title="Activate (Enter)" onClick={() => setActiveNode(id)} />
             <NodeAction icon="external" title="Open externally" onClick={openExternally} />

@@ -49,9 +49,7 @@ const TextNodeComponent = ({ id, data, selected }: NodeProps<FlowNode>) => {
       className="text"
       onResizeEnd={onResizeEnd}
       actions={
-        active ? (
-          <NodeAction icon="close" title="Finish editing (Escape)" onClick={() => setActiveNode(null)} />
-        ) : (
+        active ? null : (
           <>
             <NodeAction icon="edit" title="Edit (Enter)" onClick={() => setActiveNode(id)} />
             <NodeAction icon="palette" title="Colour" onClick={chooseColor} />

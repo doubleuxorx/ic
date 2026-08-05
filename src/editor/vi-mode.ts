@@ -40,7 +40,13 @@ import {
   type EditorState,
   type Extension,
 } from '@codemirror/state';
-import { EditorView, keymap, type Command } from '@codemirror/view';
+import {
+  EditorView,
+  ViewPlugin,
+  keymap,
+  type Command,
+  type ViewUpdate,
+} from '@codemirror/view';
 
 export type ViMode = 'insert' | 'normal' | 'visual';
 
@@ -181,6 +187,64 @@ const handleNormalKey = (view: EditorView, event: KeyboardEvent): boolean => {
   return key.length === 1;
 };
 
+/**
+ * Publishes the width of the character under the cursor, so the block cursor
+ * can cover exactly that character.
+ *
+ * No CSS length can do this. Live preview uses a proportional face, where every
+ * glyph is a different width, and a heading is larger than the body text the
+ * cursor element inherits its size from — a fixed `em` measure is wrong on both
+ * counts. Measuring keeps CodeMirror's own cursor, and therefore its placement,
+ * and only corrects the width.
+ */
+const blockCursorWidth = ViewPlugin.fromClass(
+  class {
+    constructor(view: EditorView) {
+      this.measure(view);
+    }
+
+    update(update: ViewUpdate): void {
+      if (update.selectionSet || update.docChanged || update.geometryChanged) {
+        this.measure(update.view);
+      }
+    }
+
+    /** Read and write are split so the measurement never forces a reflow. */
+    measure(view: EditorView): void {
+      view.requestMeasure<number>({
+        read: (instance) => {
+          const head = instance.state.selection.main.head;
+          const line = instance.state.doc.lineAt(head);
+          // Past the last character there is nothing to cover, so the cell
+          // before the cursor is measured instead: the block then keeps a full
+          // width in the empty cell, which is where a terminal would put it.
+          const from = head < line.to ? head : head - 1;
+          if (from >= line.from) {
+            const start = instance.coordsAtPos(from);
+            const end = instance.coordsAtPos(from + 1);
+            // Coordinates are already in CSS pixels: CodeMirror divides the
+            // canvas zoom out of them. The width is written back inside that
+            // same transform, which scales it once, so it lands at the right
+            // size. `end` is not to the right of `start` when the next
+            // character wrapped onto another line.
+            if (start && end && end.left > start.left) return end.left - start.left;
+          }
+          // An empty line has no character on either side of the cursor, so
+          // there is nothing to measure and the editor's own character width
+          // stands in.
+          return instance.defaultCharacterWidth;
+        },
+        // Always an explicit measurement. Leaving the property unset instead
+        // would fall back to a length in the theme, and an `em` there resolves
+        // against the cursor element's font size rather than the line's.
+        write: (width, instance) => {
+          instance.dom.style.setProperty('--vi-cursor-width', `${width}px`);
+        },
+      });
+    }
+  },
+);
+
 /** Reflects the mode on the editor element so the theme can style the cursor. */
 const modeClass = EditorView.updateListener.of((update) => {
   const mode = update.state.field(viStateField, false)?.mode ?? 'insert';
@@ -191,6 +255,7 @@ const modeClass = EditorView.updateListener.of((update) => {
 export const viLite = (): Extension => [
   viStateField,
   modeClass,
+  blockCursorWidth,
   Prec.highest(
     keymap.of([
       {
