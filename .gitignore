@@ -4,6 +4,9 @@ src-tauri/target/
 src-tauri/gen/
 public/pdfjs/
 fixtures/performance/
+.flatpak-builder/
+build-flatpak/
+*.flatpak
 *.tsbuildinfo
 .app/
 .env

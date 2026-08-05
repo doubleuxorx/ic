@@ -5,5 +5,8 @@ Comment=Arrange Markdown, documents and media on an infinite canvas
 Exec=ic
 Icon=org.ic.canvas
 Terminal=false
+# GTK3 takes WM_CLASS from the program name, not from the app id, so shells
+# need this to match the window to this entry.
+StartupWMClass=ic
 Categories=Office;
 Keywords=canvas;markdown;notes;documents;knowledge;

@@ -16,7 +16,7 @@ git -C "$TOOLS_DIR" fetch -q --depth=1 \
 git -C "$TOOLS_DIR" checkout -q --detach FETCH_HEAD
 
 python3 -m venv "$VENV_DIR"
-"$VENV_DIR/bin/pip" install -q "$TOOLS_DIR/node" tomlkit aiohttp
+"$VENV_DIR/bin/pip" install -q "$TOOLS_DIR/node" tomlkit==0.15.1 aiohttp==3.14.3
 
 cd "$PROJECT_DIR"
 "$VENV_DIR/bin/flatpak-node-generator" --no-requests-cache \

@@ -216,12 +216,37 @@ jobs:
           path: src-tauri/target/release/bundle/appimage-musl/*.AppImage
           if-no-files-found: error
 
+  # Runs on pull requests too: the generated source manifests are the only part
+  # of the Flatpak build that goes stale silently, and the build itself is too
+  # expensive to run per PR.
+  flatpak-sources:
+    name: flatpak sources in sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Regenerate source manifests
+        run: sh flatpak/generate-sources.sh
+
+      - name: Fail if they differ from the committed ones
+        run: |
+          if ! git diff --exit-code -- flatpak/node-sources.json flatpak/cargo-sources.json; then
+            echo "::error::flatpak/*-sources.json no longer match the lockfiles;" \
+              "run flatpak/generate-sources.sh and commit the result"
+            exit 1
+          fi
+
   flatpak:
     name: package (Flatpak x86_64)
     needs: check
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # A source-tree change invalidates the single module's cache stage, so most
+    # runs rebuild all of the Rust dependency graph with lto and one codegen
+    # unit. Budgeted like the Alpine AppImage job, which does the same work.
+    timeout-minutes: 60
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-48
       options: --privileged
@@ -230,9 +255,30 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build Flatpak
-        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        # v6, pinned like the Alpine builder image below.
+        uses: flatpak/flatpak-github-actions/flatpak-builder@401fe28a8384095fc1531b9d320b292f0ee45adb
         with:
           bundle: ic.flatpak
+          branch: stable
           manifest-path: flatpak/org.ic.canvas.yml
-          artifact-name: ic-flatpak-x86_64
           cache-key: flatpak-${{ hashFiles('flatpak/org.ic.canvas.yml', 'flatpak/*-sources.json', 'yarn.lock', 'src-tauri/Cargo.lock') }}
+
+      # The bundle is only ever installed from, so check it the way a user gets
+      # it: every library resolvable against the plain runtime, the exported
+      # files present, and no network permission smuggled into the metadata.
+      - name: Smoke test bundle
+        run: |
+          flatpak install --user --noninteractive --no-related --bundle ic.flatpak
+          flatpak run --user --command=sh org.ic.canvas -c '
+            set -e
+            test -x /app/bin/ic
+            ! ldd /app/bin/ic | grep -q "not found"
+            test -f /app/share/applications/org.ic.canvas.desktop
+            test -f /app/share/metainfo/org.ic.canvas.metainfo.xml
+          '
+          flatpak info --show-metadata org.ic.canvas > metadata.txt
+          grep -q '^\[Extension org.freedesktop.Platform.ffmpeg-full\]$' metadata.txt
+          if grep '^shared=' metadata.txt | grep -q network; then
+            echo "::error::the bundle grants network access"
+            exit 1
+          fi

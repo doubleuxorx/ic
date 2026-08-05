@@ -36,6 +36,18 @@ yarn app:dev                      # development window with hot reload
 yarn app:build                    # installers in src-tauri/target/release/bundle
 ```
 
+A Flatpak is built from `flatpak/org.ic.canvas.yml`, offline, against pinned
+source manifests:
+
+```sh
+flatpak-builder --user --force-clean build-flatpak flatpak/org.ic.canvas.yml
+```
+
+`flatpak/node-sources.json` and `flatpak/cargo-sources.json` are generated, not
+written by hand. After changing `yarn.lock` or `src-tauri/Cargo.lock`, run
+`flatpak/generate-sources.sh` and commit the result; CI fails if the two drift
+apart.
+
 Open a directory with `Open workspace…` from the palette, or pass one on the
 command line:
 

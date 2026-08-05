@@ -14,8 +14,35 @@ finish-args:
   - --socket=fallback-x11
   - --socket=pulseaudio
   - --device=dri
-  # Workspaces are directories that the Rust backend watches and edits directly.
+  # Workspaces are directories that the Rust backend watches and edits directly,
+  # and a workspace may live anywhere under $HOME, so nothing narrower keeps the
+  # application usable: the file chooser portal hands out single files, not a
+  # tree that `notify` can watch. Mask the directories a compromised webview
+  # would want most; with no network grant these are the remaining targets.
   - --filesystem=home
+  - --nofilesystem=home/.ssh
+  - --nofilesystem=home/.gnupg
+  - --nofilesystem=home/.pki
+  - --nofilesystem=home/.config/autostart
+  - --nofilesystem=home/.local/share/applications
+  # Workspaces on removable media are out of reach by design; granting
+  # --filesystem=/run/media would widen the sandbox for an uncommon case.
+
+# WebKitGTK decodes media through GStreamer, and the GNOME runtime ships a
+# codec-restricted ffmpeg with no avdec_h264 or avdec_aac. Without this
+# extension the .mp4, .m4v, .mov and .m4a files that kinds.rs accepts fail to
+# play, while .webm, .ogg, .opus, .mp3, .wav and .flac work from the runtime.
+add-extensions:
+  org.freedesktop.Platform.ffmpeg-full:
+    directory: lib/ffmpeg
+    version: "24.08"
+    add-ld-path: .
+    no-autodownload: false
+    autodelete: false
+
+cleanup-commands:
+  # Mount point for the extension above; it must exist in the built app.
+  - mkdir -p /app/lib/ffmpeg
 
 modules:
   - name: ic
@@ -25,13 +52,21 @@ modules:
       env:
         HOME: /run/build/ic
         YARN_CACHE_FOLDER: /run/build/ic/.yarn-cache
+        # Points yarn at the mirror from node-sources.json without writing a
+        # .yarnrc into the copied source tree.
+        YARN_YARN_OFFLINE_MIRROR: /run/build/ic/flatpak-node/yarn-mirror
         CARGO_HOME: /run/build/ic/cargo
         CARGO_NET_OFFLINE: "true"
     build-commands:
-      - printf 'yarn-offline-mirror "%s"\n' "$FLATPAK_BUILDER_BUILDDIR/flatpak-node/yarn-mirror" > .yarnrc
+      # flatpak-cargo-generator still emits the deprecated $CARGO_HOME/config
+      # name, which cargo warns about on every invocation.
+      - test -f cargo/config && mv cargo/config cargo/config.toml || true
       - yarn install --offline --frozen-lockfile --non-interactive
       - yarn build
-      - cargo fetch --locked --offline --manifest-path src-tauri/Cargo.toml
+      # glib is a [patch.crates-io] path dependency carrying the fix for
+      # RUSTSEC-2024-0429, so it is compiled from the tree rather than vendored.
+      # Fail here, not three modules later, if it did not get copied in.
+      - test -f src-tauri/third_party/glib-0.18.5/Cargo.toml
       - cargo build --locked --offline --release --manifest-path src-tauri/Cargo.toml --features custom-protocol --bin ic
       - install -Dm755 src-tauri/target/release/ic "$FLATPAK_DEST/bin/ic"
       - install -Dm644 flatpak/org.ic.canvas.desktop "$FLATPAK_DEST/share/applications/org.ic.canvas.desktop"
@@ -40,15 +75,19 @@ modules:
       - install -Dm644 src-tauri/icons/128x128.png "$FLATPAK_DEST/share/icons/hicolor/128x128/apps/org.ic.canvas.png"
       - install -Dm644 src-tauri/icons/128x128@2x.png "$FLATPAK_DEST/share/icons/hicolor/256x256/apps/org.ic.canvas.png"
       - install -Dm644 src-tauri/icons/icon.png "$FLATPAK_DEST/share/icons/hicolor/512x512/apps/org.ic.canvas.png"
+      # Catch broken metadata here rather than in a software centre.
+      - desktop-file-validate "$FLATPAK_DEST/share/applications/org.ic.canvas.desktop"
+      - appstreamcli validate --no-net "$FLATPAK_DEST/share/metainfo/org.ic.canvas.metainfo.xml"
     sources:
       - type: dir
         path: ..
+        # skip entries are literal relative paths: flatpak-builder does not glob
+        # them, so a pattern like `.pi*` would silently match nothing.
         skip:
           - .git
           - .github
-          - .pi*
-          - .flatpak-build.*
           - .flatpak-builder
+          - .pi-subagents
           - build-flatpak
           - dist
           - node_modules
