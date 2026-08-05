@@ -79,7 +79,13 @@ export const useFileFacts = (relativePath: string): FactsState => {
         cancelled = true;
       };
     }
-    setState({ facts: null, error: null, loading: true });
+    // Facts already read for this path stay on screen while they are re-read,
+    // so an external change refreshes a media view instead of unmounting it.
+    setState((previous) => ({
+      facts: previous.facts?.relativePath === relativePath ? previous.facts : null,
+      error: null,
+      loading: true,
+    }));
     ipc
       .fileFacts(relativePath)
       .then((facts) => {

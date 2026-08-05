@@ -7,6 +7,7 @@
 use std::path::Path;
 use std::time::Duration;
 
+use notify::event::{AccessKind, AccessMode, EventKind};
 use notify::RecursiveMode;
 use notify_debouncer_full::{new_debouncer, DebounceEventResult, Debouncer, RecommendedCache};
 use serde::Serialize;
@@ -34,6 +35,9 @@ pub fn watch<R: Runtime>(app: AppHandle<R>, root: &Path) -> Option<WatcherHandle
             let Ok(events) = result else { return };
             let mut changed: Vec<String> = Vec::new();
             for event in events {
+                if !is_content_change(event.kind) {
+                    continue;
+                }
                 for path in &event.paths {
                     if is_ignored(&emit_root, path) {
                         continue;
@@ -58,6 +62,22 @@ pub fn watch<R: Runtime>(app: AppHandle<R>, root: &Path) -> Option<WatcherHandle
     })
 }
 
+/// True for events that can have altered what a file contains.
+///
+/// Reads must be excluded: the inotify backend also reports opens, so a file the
+/// app reads itself would come back as changed, and re-reading it to answer that
+/// would report it again — a loop that never settles. `IN_CLOSE_WRITE` arrives as
+/// an access event but does follow a write, so it stays.
+fn is_content_change(kind: EventKind) -> bool {
+    match kind {
+        EventKind::Access(access) => {
+            matches!(access, AccessKind::Close(AccessMode::Write))
+        }
+        EventKind::Other => false,
+        _ => true,
+    }
+}
+
 /// Ignore `.app`, hidden files and the temporary files produced by atomic writes.
 fn is_ignored(root: &Path, path: &Path) -> bool {
     let Ok(relative) = path.strip_prefix(root) else {
@@ -67,4 +87,51 @@ fn is_ignored(root: &Path, path: &Path) -> bool {
         let name = component.as_os_str().to_string_lossy();
         name == APP_DIR || is_hidden_name(&name) || name.ends_with(".tmp")
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_content_change, is_ignored};
+    use notify::event::{
+        AccessKind, AccessMode, CreateKind, DataChange, EventKind, MetadataKind, ModifyKind,
+        RemoveKind,
+    };
+    use std::path::Path;
+
+    #[test]
+    fn reads_are_not_changes() {
+        assert!(!is_content_change(EventKind::Access(AccessKind::Open(
+            AccessMode::Any
+        ))));
+        assert!(!is_content_change(EventKind::Access(AccessKind::Read)));
+        assert!(!is_content_change(EventKind::Access(AccessKind::Close(
+            AccessMode::Read
+        ))));
+        assert!(!is_content_change(EventKind::Other));
+    }
+
+    #[test]
+    fn writes_are_changes() {
+        assert!(is_content_change(EventKind::Create(CreateKind::File)));
+        assert!(is_content_change(EventKind::Modify(ModifyKind::Data(
+            DataChange::Any
+        ))));
+        assert!(is_content_change(EventKind::Modify(ModifyKind::Metadata(
+            MetadataKind::Any
+        ))));
+        assert!(is_content_change(EventKind::Remove(RemoveKind::File)));
+        assert!(is_content_change(EventKind::Access(AccessKind::Close(
+            AccessMode::Write
+        ))));
+    }
+
+    #[test]
+    fn app_data_and_hidden_paths_are_ignored() {
+        let root = Path::new("/ws");
+        assert!(is_ignored(root, Path::new("/ws/.app/thumbnails/a.png")));
+        assert!(is_ignored(root, Path::new("/ws/Notes/.hidden.md")));
+        assert!(is_ignored(root, Path::new("/ws/Notes/A.md.1234.tmp")));
+        assert!(is_ignored(root, Path::new("/elsewhere/A.md")));
+        assert!(!is_ignored(root, Path::new("/ws/Notes/A.md")));
+    }
 }
