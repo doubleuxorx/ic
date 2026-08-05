@@ -63,7 +63,7 @@ toolbar.
 | Drag on empty canvas | Rubber-band selection |
 | Middle or right drag | Pan |
 | Scroll | Pan; pinch or `Mod`+scroll zooms |
-| Hover a node | Connection dots appear centred on each side |
+| Approach a node's side | That side's connection dot appears |
 | Drag a dot | Create an edge |
 
 ## Live preview

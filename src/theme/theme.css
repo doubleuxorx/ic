@@ -149,22 +149,36 @@ body {
   background: var(--surface);
   border: 1.5px solid var(--border-strong);
   opacity: 0;
-  transition: opacity 90ms ease-out, transform 90ms ease-out;
-  pointer-events: none;
+  transition: opacity 90ms ease-out, box-shadow 90ms ease-out;
 }
 
-/* The connection dot appears centred on each edge, on hover only. */
-.node:hover .react-flow__handle,
-.react-flow__node.selected .react-flow__handle,
+/* A 9px dot is too small to aim at, so an invisible square around it catches
+   the pointer first. Whether a handle takes pointer events at all is React
+   Flow's decision, made from whether it can be connected; the square inherits
+   that rather than overriding it. */
+.react-flow__handle::before {
+  content: '';
+  position: absolute;
+  inset: -9px;
+}
+
+/* Approaching one side of a node reveals that side's dot and no others, so a
+   node that is merely under the pointer stays quiet. While a connection is
+   being dragged every dot is shown, because the question then is where it can
+   be dropped. */
+.react-flow__handle:hover,
 .react-flow.connecting .react-flow__handle {
   opacity: 1;
-  pointer-events: all;
 }
 
+/* Feedback is a ring rather than a scale. React Flow centres a handle with a
+   translate in `transform`, so setting `transform` here replaces that centring
+   and the dot jumps by half its width the moment it is aimed at. A shadow
+   grows it without touching where it sits. */
 .react-flow__handle:hover {
   background: var(--accent);
   border-color: var(--accent);
-  transform: scale(1.35);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 .react-flow__handle-top {
@@ -501,7 +515,8 @@ body {
   -webkit-user-select: text;
 }
 
-/* Resize controls belong to the same hover-only vocabulary as the handles. */
+/* Resize controls are shown by selection, not proximity: they belong to the
+   node as a whole rather than to one point on its border. */
 .react-flow__resize-control.handle {
   width: 8px;
   height: 8px;
