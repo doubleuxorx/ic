@@ -26,11 +26,13 @@ included. The media server started for real and driven over TCP. The watcher
 against a real directory, including that the application's own reads and its own
 cache writes are not reported as changes.
 
-Two details cost an afternoon each if rediscovered: the invoke URL must be
+Three details cost an afternoon each if rediscovered: the invoke URL must be
 `tauri://localhost`, or the request counts as a remote origin and the ACL refuses
-the application's own commands; and the setup hook does not run when an
+the application's own commands; the setup hook does not run when an
 application is built, only when its event loop first reports itself ready, which
-under the mock runtime is one iteration.
+under the mock runtime is one iteration; and on Windows the test executable needs
+the application manifest that `build.rs` embeds, or it does not load at all —
+`STATUS_ENTRYPOINT_NOT_FOUND`, before any test runs.
 
 ## Frontend, in jsdom
 
