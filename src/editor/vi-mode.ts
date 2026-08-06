@@ -136,6 +136,10 @@ const handleNormalKey = (view: EditorView, event: KeyboardEvent): boolean => {
 	if (!state || state.mode === "insert") return false;
 	const key = event.key;
 
+	// A physical Shift+G produces a Shift keydown before the G keydown. Keep a
+	// pending line count across that modifier event.
+	if (key === "Shift") return false;
+
 	if (event.ctrlKey && (key === "r" || key === "R")) {
 		redo(view);
 		return true;

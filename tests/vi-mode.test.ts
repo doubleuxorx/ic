@@ -23,6 +23,19 @@ const editor = (doc: string, line = 1): EditorView => {
 const cursorLine = (view: EditorView): number =>
 	view.state.doc.lineAt(view.state.selection.main.head).number;
 
+/** Reproduce the separate modifier event sent by a physical Shift+G chord. */
+const pressUppercaseG = async (view: EditorView): Promise<void> => {
+	view.contentDOM.dispatchEvent(
+		new KeyboardEvent("keydown", {
+			key: "Shift",
+			shiftKey: true,
+			bubbles: true,
+			cancelable: true,
+		}),
+	);
+	await press(view.contentDOM, "G", { shiftKey: true });
+};
+
 afterEach(() => {
 	for (const view of views.splice(0)) view.destroy();
 	document.body.innerHTML = "";
@@ -32,7 +45,7 @@ describe("Vi G motions", () => {
 	it("moves bare uppercase G to the final line", async () => {
 		const view = editor("one\ntwo\n  three");
 
-		await press(view.contentDOM, "G", { shiftKey: true });
+		await pressUppercaseG(view);
 
 		expect(cursorLine(view)).toBe(3);
 		expect(view.state.selection.main.head).toBe(
@@ -48,16 +61,16 @@ describe("Vi G motions", () => {
 		const view = editor(doc, 4);
 
 		await press(view.contentDOM, "1");
-		await press(view.contentDOM, "G", { shiftKey: true });
+		await pressUppercaseG(view);
 		expect(cursorLine(view)).toBe(1);
 
 		await press(view.contentDOM, "3");
-		await press(view.contentDOM, "G", { shiftKey: true });
+		await pressUppercaseG(view);
 		expect(cursorLine(view)).toBe(3);
 
 		await press(view.contentDOM, "1");
 		await press(view.contentDOM, "2");
-		await press(view.contentDOM, "G", { shiftKey: true });
+		await pressUppercaseG(view);
 		expect(cursorLine(view)).toBe(12);
 	});
 
