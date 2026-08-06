@@ -22,3 +22,11 @@ createRoot(container).render(
 
 // Startup succeeded: `boot-guard` has nothing left to report.
 document.getElementById('boot')?.remove();
+
+// Built with `--mode selftest`, the window tests itself: see
+// `src/self-test/runner.ts` and `scripts/self-test.sh`. The condition is a
+// build-time constant, so an ordinary build drops the branch and the module with
+// it.
+if (import.meta.env.MODE === 'selftest') {
+  void import('@/self-test/runner').then((runner) => runner.start());
+}

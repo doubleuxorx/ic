@@ -106,6 +106,13 @@ loopback HTTP instead. Which transport a media element uses is Rust's answer to
 give — `app_facts` reports it and `mediaUrl` follows it — so no view knows or
 cares. The server's rules are in the security model.
 
+## Testing
+
+Three layers: the Rust command surface on Tauri's mock runtime, the frontend in
+jsdom, and the application testing itself in a real webview under Xvfb. Only the
+last needs a display, and none of them needs synthetic input. See
+`docs/testing.md`.
+
 ## Extension boundaries
 
 The plan defers scripting, program nodes and extensions. The seams that would

@@ -34,6 +34,10 @@ the installed application, and physical access.
    and the native file picker.
 4. **Every command validates its own arguments**, regardless of what the
    runtime authority already checked.
+5. **No command exists for testing.** The webview self-test
+   (`docs/testing.md`) reports by writing a text file through the same validated
+   `document_create` the editor uses, and its harness is selected by build mode,
+   so a release bundle contains neither it nor any extra privileged surface.
 
 ## Path handling
 

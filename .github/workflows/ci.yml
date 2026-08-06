@@ -43,14 +43,18 @@ jobs:
         with:
           workspaces: src-tauri
 
-      # WebKitGTK and its build dependencies are only needed on Linux.
+      # WebKitGTK and its build dependencies are only needed on Linux. The rest
+      # is what the webview self-test needs: a virtual display, the GStreamer
+      # decoders WebKitGTK plays media through, and a software renderer.
       - name: Install Linux dependencies
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev \
-            patchelf libssl-dev
+            patchelf libssl-dev \
+            xvfb gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+            gstreamer1.0-plugins-bad gstreamer1.0-libav libgl1-mesa-dri
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile
@@ -75,6 +79,13 @@ jobs:
 
       - name: Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      # The only test here that runs in a real webview. Everything above runs
+      # without a browser, and so cannot see a failure inside WebKitGTK's own
+      # media or PDF stack — which is where the bug that prompted this test was.
+      - name: Webview self-test
+        if: matrix.os == 'ubuntu-latest'
+        run: sh scripts/self-test.sh
 
   audit:
     name: dependency audit
