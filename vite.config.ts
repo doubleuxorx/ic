@@ -40,7 +40,11 @@ export default defineConfig({
     },
   },
   test: {
+    // Per file, so a test of pure functions pays nothing for a DOM. Anything
+    // that renders declares `// @vitest-environment jsdom` at the top.
     environment: 'node',
-    include: ['tests/**/*.test.ts'],
+    include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
+    // Geometry and observers jsdom lacks, in place before any module loads.
+    setupFiles: ['./tests/support/dom-stubs.ts'],
   },
 });
