@@ -54,6 +54,18 @@ if (typeof window !== 'undefined') {
     }
   }
 
+  const emptyRect = (): DOMRect => ({
+    x: 0,
+    y: 0,
+    width: 0,
+    height: 0,
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    toJSON: () => ({}),
+  });
+
   global.ResizeObserver ??= NoopObserver;
   global.IntersectionObserver ??= NoopObserver;
   global.DOMMatrix ??= FlatMatrix;
@@ -75,4 +87,17 @@ if (typeof window !== 'undefined') {
   // jsdom throws for an unimplemented context rather than returning null, which
   // is what a caller that cannot draw expects to see.
   HTMLCanvasElement.prototype.getContext ??= () => null;
+
+  // jsdom gives `Range` none of the CSSOM View geometry, and CodeMirror measures
+  // its own text by asking a range over a text node for the boxes it occupies.
+  // That happens in a `requestAnimationFrame` callback, so the missing method
+  // surfaced as an unhandled exception after a test had already passed —
+  // whenever the frame beat the editor's teardown. An empty list is a shape
+  // CodeMirror already handles: it returns one itself for nodes it cannot
+  // measure.
+  Range.prototype.getClientRects ??= () => {
+    const rects: DOMRect[] = [];
+    return Object.assign(rects, { item: () => null }) as unknown as DOMRectList;
+  };
+  Range.prototype.getBoundingClientRect ??= () => emptyRect();
 }
