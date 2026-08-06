@@ -26,9 +26,11 @@ included. The media server started for real and driven over TCP. The watcher
 against a real directory, including that the application's own reads and its own
 cache writes are not reported as changes.
 
-Three details cost an afternoon each if rediscovered: the invoke URL must be
-`tauri://localhost`, or the request counts as a remote origin and the ACL refuses
-the application's own commands; the setup hook does not run when an
+Three details cost an afternoon each if rediscovered: the invoke URL must be the
+one the window is really on — `tauri://localhost`, but `http://tauri.localhost` on
+Windows, which is why `test_support.rs` asks the window rather than naming one —
+or the request counts as a remote origin and the ACL refuses the application's own
+commands; the setup hook does not run when an
 application is built, only when its event loop first reports itself ready, which
 under the mock runtime is one iteration; and on Windows the test executable needs
 the application manifest that `build.rs` embeds, or it does not load at all —
@@ -74,11 +76,19 @@ itself: `src/self-test/runner.ts` mounts a real node per fixture and asks the
 browser for its own numbers — `naturalWidth`, `duration`, `currentTime`
 advancing, the pixels on the PDF canvas — collects any
 `securitypolicyviolation`, and writes a report into the scratch workspace with
-the ordinary `document_create` command. No command exists for testing, and the
-harness is selected by build mode, so a release bundle contains neither.
+the ordinary document commands. No command exists for testing, and the harness is
+selected by build mode, so a release bundle contains neither.
 
 No synthetic input is involved: no xdotool, no screenshots, nothing compared by
 eye. A display is, though — WebKitGTK has no headless mode.
+
+One thing about serving the frontend rather than bundling it: a dev server
+reloads the page the first time it pre-bundles a dependency, and it does that
+when the dependency is first asked for, which can be in the middle of a run.
+`optimizeDeps.include` in `vite.config.ts` names the one nothing reaches from an
+entry point vite scans — the PDF worker — so this only happened on a machine with
+a cold cache, which is to say on CI. A run that reloads anyway still reports: the
+window starts over and the second pass replaces what the first left behind.
 
 ## What is still manual
 

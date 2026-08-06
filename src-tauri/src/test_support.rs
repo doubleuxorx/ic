@@ -8,10 +8,11 @@
 //!
 //! Two details are easy to get wrong and cost an afternoon each:
 //!
-//! - the invoke URL must be `tauri://localhost`. Anything else counts as a
-//!   remote origin, and the access-control layer then refuses the application's
-//!   own commands with "not allowed. Plugin not found", which reads like a
-//!   missing registration;
+//! - the invoke URL has to be the one this window is actually on, which is not
+//!   the same on every platform: see [`TestApp::local_origin`]. Anything else
+//!   counts as a remote origin, and the access-control layer then refuses the
+//!   application's own commands with "not allowed. Plugin not found", which reads
+//!   like a missing registration;
 //! - the context comes from [`tauri::test::mock_context`], so nothing here needs
 //!   `dist/` to exist and `cargo test` does not depend on a frontend build.
 
@@ -83,6 +84,19 @@ impl TestApp {
         self.dir.path().join(relative)
     }
 
+    /// Where this window is, which is what makes a request a local one.
+    ///
+    /// Asked of the window rather than written down, because it is not the same
+    /// everywhere: Windows and Android have no custom scheme to load a frontend
+    /// from, so Tauri serves it over `http://tauri.localhost` there and uses
+    /// `tauri://localhost` on every other platform. Sending the wrong one makes
+    /// every command a remote request, and the access-control layer refuses the
+    /// lot — which is how `cargo test` failed on Windows alone, 48 tests at once,
+    /// while macOS and Linux passed.
+    fn local_origin(&self) -> tauri::Url {
+        self.webview.url().expect("the window reports where it is")
+    }
+
     /// Call a command the way the webview does, and get back what it would.
     pub fn invoke(&self, command: &str, body: Value) -> Result<Value, Value> {
         tauri::test::get_ipc_response(
@@ -91,7 +105,7 @@ impl TestApp {
                 cmd: command.into(),
                 callback: tauri::ipc::CallbackFn(0),
                 error: tauri::ipc::CallbackFn(1),
-                url: "tauri://localhost".parse().expect("a valid local origin"),
+                url: self.local_origin(),
                 body: body.into(),
                 headers: Default::default(),
                 invoke_key: INVOKE_KEY.to_string(),
