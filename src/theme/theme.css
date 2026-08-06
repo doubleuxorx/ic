@@ -35,7 +35,6 @@
   --canvas-color-5: #1a7f8e;
   --canvas-color-6: #7b3fbf;
 
-  --node-radius: 6px;
   --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
   --font-size-ui: 13px;
@@ -280,7 +279,8 @@ body {
   height: 100%;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--node-radius);
+  /* Square: a corner radius is a fixed length, so it does not shrink with a
+     node drawn smaller and eats one at a quarter size. */
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -300,6 +300,23 @@ body {
 .node.active {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent);
+}
+
+/*
+ * Everything the node draws, as opposed to the frame it draws in. A node given
+ * a content scale lays this out at the size its contents would have had and
+ * draws it into the box, so shrinking a node does not reflow what is in it.
+ */
+.node-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  /* What the hover buttons are placed against, at every scale: a transform
+     would make this their containing block anyway, so it says so itself
+     rather than having them move by a border's width at a scale of 1. */
+  position: relative;
+  transform-origin: 0 0;
 }
 
 .node-header {
@@ -393,7 +410,6 @@ body {
 .node.group {
   background: color-mix(in srgb, var(--group-color, var(--border)) 8%, transparent);
   border: 1.5px dashed var(--group-color, var(--border-strong));
-  border-radius: 10px;
 }
 
 .node.group .group-label {

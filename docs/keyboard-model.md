@@ -48,8 +48,8 @@ the native event too and CodeMirror, further down the tree, never sees the key.
 | `Mod+Shift+T` | Toggle theme |
 
 Everything else — new canvas, new note, add text box, add group, add file, add
-link, import file, colours, z-order, open externally, reveal in file manager,
-Vi mode, live preview, settings — is in the palette. There are no menus and no
+link, import file, colours, node scale, z-order, open externally, reveal in file
+manager, Vi mode, live preview, settings — is in the palette. There are no menus and no
 toolbar.
 
 ## Canvas keys

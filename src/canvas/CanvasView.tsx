@@ -17,6 +17,7 @@ import {
   applyEdgeChanges,
   applyNodeChanges,
   useReactFlow,
+  useStore,
   type Connection,
   type EdgeChange,
   type NodeChange,
@@ -39,6 +40,7 @@ import {
 import { useCanvasStore } from './canvas-store';
 import { edgeTypes, nodeTypes } from './node-types';
 import { membersOf } from './selection';
+import { MAX_ZOOM, MIN_ZOOM, backgroundGrid } from './zoom';
 
 // Stable identities: React Flow re-registers listeners when these props change,
 // so they must not be rebuilt on every render.
@@ -46,6 +48,17 @@ const MULTI_SELECTION_KEYS = ['Shift', 'Meta', 'Control'];
 /** Middle and right button pan; left is left free for selection. */
 const PAN_BUTTONS = [1, 2];
 const PRO_OPTIONS = { hideAttribution: true };
+
+/**
+ * The dot grid, respaced as the canvas scales. It subscribes to the transform
+ * on its own so that a zoom gesture repaints the background without rebuilding
+ * the node list.
+ */
+const CanvasBackground = () => {
+  const zoom = useStore((state) => state.transform[2]);
+  const { gap, size } = backgroundGrid(zoom);
+  return <Background variant={BackgroundVariant.Dots} gap={gap} size={size} />;
+};
 
 interface DragContext {
   /** Group members captured at drag start, with their original positions. */
@@ -297,8 +310,8 @@ export const CanvasView = ({ showMinimap }: { showMinimap: boolean }) => {
       selectionOnDrag
       panOnScroll
       zoomOnPinch
-      minZoom={0.05}
-      maxZoom={4}
+      minZoom={MIN_ZOOM}
+      maxZoom={MAX_ZOOM}
       onlyRenderVisibleElements
       proOptions={PRO_OPTIONS}
       nodesDraggable={activeNodeId === null}
@@ -306,7 +319,7 @@ export const CanvasView = ({ showMinimap }: { showMinimap: boolean }) => {
       elevateEdgesOnSelect
       fitView={false}
     >
-      <Background variant={BackgroundVariant.Dots} gap={24} size={1} />
+      <CanvasBackground />
       {showMinimap ? <MiniMap pannable zoomable position="bottom-right" /> : null}
     </ReactFlow>
   );

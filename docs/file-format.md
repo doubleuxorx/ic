@@ -55,10 +55,31 @@ and the file is left unchanged.
 file and mapped to theme-aware colours at render time, which is what the
 specification intends. Text contrast is computed per coloured surface.
 
+### Drawing scale
+
+One node field is written that the specification does not define: `icScale`, a
+number on a node saying what scale it draws its contents at.
+
+A node has a single size, and it answers two questions at once — how much canvas
+the node takes up, and how much room its contents have to lay out in. They are
+the same question until someone shrinks a node to put it aside, at which point a
+page reflowed into a narrow column is not the same page made small. `icScale`
+separates them: the size stays the box, and the contents are laid out at the
+size they would have had, then drawn into it. Nothing reflows, so zooming back
+in returns the document rather than magnifying a thumbnail of it.
+
+It is written only on a node that has been scaled, is dropped again when the
+node returns to normal size, and is clamped to between 0.05 and 16 on load. An
+application that does not know the field lays the node out to its box, which is
+what happens here at a scale of 1: the canvas still opens, it just shows
+reflowed contents where this shows a smaller page. Groups never carry it — a
+group contains other nodes rather than contents of its own.
+
 ### Compatibility rules
 
-- Only specification fields are written. No React Flow state, no viewport, no
-  selection, no fit mode and no typography metadata reaches a `.canvas` file.
+- Only specification fields and `icScale` are written. No React Flow state, no
+  viewport, no selection, no fit mode and no typography metadata reaches a
+  `.canvas` file.
 - **Unknown fields are preserved** — at the top level, on nodes and on edges —
   and written back before the known fields, so another application's data
   survives a round trip.

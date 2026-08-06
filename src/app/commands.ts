@@ -19,7 +19,11 @@ import { useDocumentStore } from '@/editor/document-store';
 import { errorMessage } from '@/shared/errors';
 import { ipc } from '@/shared/ipc-types';
 import {
+  MAX_CONTENT_SCALE,
+  MIN_CONTENT_SCALE,
+  contentScale,
   createId,
+  withContentScale,
   type CanvasEdge,
   type CanvasNode,
   type FileNode,
@@ -79,6 +83,44 @@ const selectedImageNodes = (context: CommandContext): FileNode[] =>
       node.type === 'file' &&
       IMAGE_EXTENSIONS.some((extension) => node.file.toLowerCase().endsWith(extension)),
   );
+
+const SCALE_STEP = 1.25;
+
+/** A group is a box around other nodes; scaling it would scale nothing. */
+const scalableNodes = (context: CommandContext): CanvasNode[] =>
+  context.selection.filter((node) => node.type !== 'group');
+
+/**
+ * Draw the selected nodes at a different size, box and contents together.
+ *
+ * This is the other half of the resize handles: those change how much room the
+ * contents have, and the text reflows into it; this changes how big the same
+ * thing is drawn, and nothing reflows. A node keeps its centre, so making one
+ * smaller leaves it where it was among the others.
+ */
+const rescaleNodes = (nodes: CanvasNode[], target: (current: number) => number): void => {
+  const patches = nodes.flatMap((node) => {
+    const current = contentScale(node);
+    const next = Math.min(Math.max(target(current), MIN_CONTENT_SCALE), MAX_CONTENT_SCALE);
+    const ratio = next / current;
+    if (ratio === 1) return [];
+    const width = Math.max(1, Math.round(node.width * ratio));
+    const height = Math.max(1, Math.round(node.height * ratio));
+    return [
+      {
+        id: node.id,
+        changes: {
+          x: Math.round(node.x + (node.width - width) / 2),
+          y: Math.round(node.y + (node.height - height) / 2),
+          width,
+          height,
+          ...withContentScale(node, next),
+        },
+      },
+    ];
+  });
+  if (patches.length > 0) canvas().mutate({ type: 'patch-nodes', patches });
+};
 
 /** Fit mode is a view preference, so it is not written into the canvas. */
 const fitCommand = (id: string, title: string, mode: FitMode): AppCommand => ({
@@ -464,6 +506,33 @@ const commands: AppCommand[] = [
       const ids = context.selection.filter((node) => node.type === 'group').map((node) => node.id);
       if (ids.length > 0) canvas().mutate({ type: 'delete-nodes', ids });
     },
+  },
+  {
+    id: 'edit.shrinkNode',
+    title: 'Draw node smaller',
+    category: 'Edit',
+    aliases: ['scale', 'shrink', 'zoom'],
+    isAvailable: (context) => scalableNodes(context).length > 0 && !context.isEditing,
+    execute: (context) =>
+      rescaleNodes(scalableNodes(context), (current) => current / SCALE_STEP),
+  },
+  {
+    id: 'edit.enlargeNode',
+    title: 'Draw node larger',
+    category: 'Edit',
+    aliases: ['scale', 'enlarge', 'zoom'],
+    isAvailable: (context) => scalableNodes(context).length > 0 && !context.isEditing,
+    execute: (context) =>
+      rescaleNodes(scalableNodes(context), (current) => current * SCALE_STEP),
+  },
+  {
+    id: 'edit.resetNodeScale',
+    title: 'Draw node at normal size',
+    category: 'Edit',
+    aliases: ['scale', 'reset'],
+    isAvailable: (context) =>
+      !context.isEditing && scalableNodes(context).some((node) => contentScale(node) !== 1),
+    execute: (context) => rescaleNodes(scalableNodes(context), () => 1),
   },
   {
     id: 'edit.nodeColor',

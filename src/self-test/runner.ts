@@ -22,9 +22,11 @@
 
 import { useUiStore } from '@/app/ui-store';
 import { useCanvasStore } from '@/canvas/canvas-store';
+import { nodeCenter } from '@/canvas/CanvasView';
+import { flowInstance } from '@/canvas/flow-bridge';
 import { errorMessage } from '@/shared/errors';
 import { ipc } from '@/shared/ipc-types';
-import { createId, type CanvasNode } from '@/shared/json-canvas';
+import { createId, withContentScale, type CanvasNode } from '@/shared/json-canvas';
 import { useWorkspaceStore } from '@/workspace/workspace-store';
 
 const REPORT_FILE = 'self-test-report.txt';
@@ -270,6 +272,106 @@ const run = async (): Promise<void> => {
     } catch {
       const sizes = canvases().map((canvas) => `${canvas.width}x${canvas.height}`).join(', ');
       throw new Error(`nothing was painted; canvases: ${sizes || 'none'}; ${shown(node)}`);
+    }
+  });
+
+  // A node made small and zoomed back into has to come back at full size, which
+  // means the page is rasterized for the pixels it covers on screen rather than
+  // for the box it sits in. Only a real webview can say whether it did.
+  await check('pdf: zooming in repaints the page at more pixels', async () => {
+    const node = nodes[1] as CanvasNode;
+    const element = () =>
+      document.querySelector<HTMLCanvasElement>(`[data-id="${node.id}"] canvas`);
+    const before = await until('the PDF canvas', element);
+    const pixels = before.width;
+    const flow = flowInstance();
+    if (!flow) throw new Error('the canvas published no instance to zoom');
+    try {
+      // Centred on the node: at this zoom anything else puts it off screen,
+      // where the canvas stops rendering it at all.
+      const centre = nodeCenter(node);
+      const zoom = 4;
+      flow.setViewport({
+        x: window.innerWidth / 2 - centre.x * zoom,
+        y: window.innerHeight / 2 - centre.y * zoom,
+        zoom,
+      });
+      const after = await until(
+        `the page to be repainted above ${pixels} pixels wide`,
+        () => {
+          const canvas = element();
+          return canvas && canvas.width > pixels && painted(canvas) && canvas;
+        },
+      );
+      return `${pixels} to ${after.width} pixels wide at ${zoom}x`;
+    } finally {
+      flow.setViewport({ x: 0, y: 0, zoom: 1 });
+    }
+  });
+
+  // The other half of it: a node drawn smaller has to take less canvas without
+  // its contents reflowing into the smaller box. That is a question about layout
+  // in a real engine, which is the one thing the tests in jsdom cannot ask.
+  await check('canvas: a node drawn smaller keeps its layout', async () => {
+    const node = nodes[1] as CanvasNode;
+    const box = () => document.querySelector(`[data-id="${node.id}"] .node`);
+    const content = () =>
+      document.querySelector<HTMLElement>(`[data-id="${node.id}"] .node-content`);
+    const width = () => box()?.getBoundingClientRect().width ?? 0;
+    const laidOutAt = () => content()?.clientWidth ?? 0;
+    // The hover buttons belong to the node, so they are drawn at its scale too.
+    // They are only rendered while it is not the active one.
+    useCanvasStore.getState().setActiveNode(null);
+    const buttons = () =>
+      document
+        .querySelector(`[data-id="${node.id}"] .node-actions`)
+        ?.getBoundingClientRect().width ?? 0;
+
+    const wasWide = await until('the node to have a width', width);
+    const hadButtons = await until('the hover buttons', buttons);
+    const wasLaidOutAt = laidOutAt();
+    const scale = 0.5;
+    try {
+      useCanvasStore.getState().mutate({
+        type: 'patch-nodes',
+        patches: [
+          {
+            id: node.id,
+            changes: {
+              width: Math.round(node.width * scale),
+              height: Math.round(node.height * scale),
+              ...withContentScale(node, scale),
+            },
+          },
+        ],
+      });
+      const nowWide = await until('the node to be drawn smaller', () => {
+        const current = width();
+        return current > 0 && current < wasWide && current;
+      });
+      const nowLaidOutAt = laidOutAt();
+      if (Math.abs(nowLaidOutAt - wasLaidOutAt) > 2) {
+        throw new Error(
+          `the contents reflowed: laid out at ${wasLaidOutAt}px, now ${nowLaidOutAt}px`,
+        );
+      }
+      const nowButtons = buttons();
+      if (Math.abs(nowButtons - hadButtons * scale) > 2) {
+        throw new Error(
+          `the buttons are ${nowButtons}px across, not the ${hadButtons * scale}px the node is drawn at`,
+        );
+      }
+      return `${Math.round(wasWide)}px wide became ${Math.round(nowWide)}px, laid out at ${nowLaidOutAt}px still, buttons ${Math.round(hadButtons)}px to ${Math.round(nowButtons)}px`;
+    } finally {
+      useCanvasStore.getState().mutate({
+        type: 'patch-nodes',
+        patches: [
+          {
+            id: node.id,
+            changes: { width: node.width, height: node.height, ...withContentScale(node, 1) },
+          },
+        ],
+      });
     }
   });
 

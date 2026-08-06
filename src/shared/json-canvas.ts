@@ -339,6 +339,47 @@ export const nodesInsideGroup = (document: CanvasDocument, group: GroupNode): Ca
       node.y + node.height <= group.y + group.height,
   );
 
+/**
+ * The scale a node draws its contents at, separately from the box it occupies.
+ *
+ * A node has one size in the format, and it does double duty: it is both how
+ * much canvas the node takes up and how much room its contents have to lay out
+ * in. Those are the same question only until someone shrinks a node to put it
+ * aside — a page reflowed into a thumbnail-sized column is not the page made
+ * small. This separates them, so a node can be made small and zoomed back into.
+ *
+ * JSON Canvas 1.0 has no field for it, so it is kept in the node's extra bag,
+ * which survives a round trip through this application and through anything else
+ * that preserves unknown keys. A reader that does not know it lays the node out
+ * to its box, which is what happens here at a scale of 1: the canvas still
+ * opens, it just shows reflowed content where this shows a shrunken page.
+ */
+export const CONTENT_SCALE_KEY = 'icScale';
+export const MIN_CONTENT_SCALE = 0.05;
+export const MAX_CONTENT_SCALE = 16;
+
+const clampScale = (scale: number): number =>
+  Math.min(Math.max(scale, MIN_CONTENT_SCALE), MAX_CONTENT_SCALE);
+
+export const contentScale = (node: CanvasNode): number => {
+  const stored = node.extra?.[CONTENT_SCALE_KEY];
+  if (typeof stored !== 'number' || !Number.isFinite(stored) || stored <= 0) return 1;
+  return clampScale(stored);
+};
+
+/**
+ * The change that puts a node at `scale`. At 1 the key is dropped rather than
+ * written, so a node scaled back to normal is saved exactly as an untouched one.
+ */
+export const withContentScale = (node: CanvasNode, scale: number): Partial<CanvasNode> => {
+  const rest = { ...(node.extra ?? {}) };
+  delete rest[CONTENT_SCALE_KEY];
+  const clamped = clampScale(scale);
+  const extra: Extra =
+    clamped === 1 ? rest : { ...rest, [CONTENT_SCALE_KEY]: Math.round(clamped * 1e4) / 1e4 };
+  return { extra: Object.keys(extra).length > 0 ? extra : undefined };
+};
+
 export const boundingBox = (
   nodes: CanvasNode[],
 ): { x: number; y: number; width: number; height: number } | null => {

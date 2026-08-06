@@ -411,6 +411,80 @@ covers('edit.ungroup', async () => {
   expect(ids()).toEqual(['a']);
 });
 
+/**
+ * Drawing a node smaller is not resizing it: the box and the contents move
+ * together, so nothing inside reflows and zooming in brings the whole thing
+ * back. The scale is not a JSON Canvas field, so it rides in the node's extra
+ * bag and has to survive being written and read back.
+ */
+covers('edit.shrinkNode', async () => {
+  await openCanvas();
+  given({ nodes: [text('a', { x: 0, y: 0, width: 200, height: 100 })], selected: ['a'] });
+
+  await run('edit.shrinkNode');
+
+  const node = nodes()[0]!;
+  expect(node.extra).toEqual({ icScale: 0.8 });
+  expect([node.width, node.height]).toEqual([160, 80]);
+  // Around its centre, so a node made smaller stays where it was among the rest.
+  expect([node.x, node.y]).toEqual([20, 10]);
+});
+
+covers('edit.shrinkNode', async () => {
+  await openCanvas();
+  const group = { id: 'g', type: 'group', x: 0, y: 0, width: 400, height: 400 } as CanvasNode;
+  given({ nodes: [group], selected: ['g'] });
+
+  // A group is a box around other nodes; it has no contents of its own to draw.
+  expect(allCommands().find((c) => c.id === 'edit.shrinkNode')?.isAvailable(context())).toBe(false);
+  await run('edit.shrinkNode');
+  expect(nodes()[0]?.width).toBe(400);
+});
+
+covers('edit.enlargeNode', async () => {
+  await openCanvas();
+  given({ nodes: [text('a', { width: 200, height: 100 })], selected: ['a'] });
+
+  await run('edit.enlargeNode');
+  expect(nodes()[0]?.extra).toEqual({ icScale: 1.25 });
+  expect(nodes()[0]?.width).toBe(250);
+
+  // Undo takes back the size and the scale together, as one change.
+  canvas().undo();
+  expect(nodes()[0]?.extra).toBeUndefined();
+  expect(nodes()[0]?.width).toBe(200);
+});
+
+covers('edit.enlargeNode', async () => {
+  await openCanvas();
+  given({ nodes: [text('a', { extra: { icScale: 16, author: 'someone else' } })], selected: ['a'] });
+
+  await run('edit.enlargeNode');
+
+  // Already at the largest it will draw: nothing moves, and a key this
+  // application does not own is still there.
+  expect(nodes()[0]?.extra).toEqual({ icScale: 16, author: 'someone else' });
+  expect(nodes()[0]?.width).toBe(200);
+});
+
+covers('edit.resetNodeScale', async () => {
+  await openCanvas();
+  given({
+    nodes: [text('a', { width: 160, height: 80, extra: { icScale: 0.8, author: 'someone else' } })],
+    selected: ['a'],
+  });
+
+  await run('edit.resetNodeScale');
+
+  // Back to normal is written as no scale at all, so the node is saved exactly
+  // as one that had never been scaled — the foreign key still untouched.
+  expect(nodes()[0]?.extra).toEqual({ author: 'someone else' });
+  expect([nodes()[0]?.width, nodes()[0]?.height]).toEqual([200, 100]);
+  expect(
+    allCommands().find((c) => c.id === 'edit.resetNodeScale')?.isAvailable(context()),
+  ).toBe(false);
+});
+
 covers('edit.nodeColor', async () => {
   await openCanvas();
   given({ nodes: [text('a'), text('b')], selected: ['a', 'b'] });

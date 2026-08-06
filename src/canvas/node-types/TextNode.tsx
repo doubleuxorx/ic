@@ -13,7 +13,7 @@ import type { NodeProps } from '@xyflow/react';
 import { MarkdownEditor } from '@/editor/MarkdownEditor';
 import { patchNode, useCanvasStore } from '@/canvas/canvas-store';
 import type { FlowNode } from '@/canvas/canvas-adapter';
-import type { TextNode as TextCanvasNode } from '@/shared/json-canvas';
+import { contentScale, type TextNode as TextCanvasNode } from '@/shared/json-canvas';
 
 import { MarkdownPreview } from './MarkdownPreview';
 import { NodeAction, NodeShell } from './NodeShell';
@@ -68,7 +68,12 @@ const TextNodeComponent = ({ id, data, selected }: NodeProps<FlowNode>) => {
       ) : (
         <div onDoubleClick={() => setActiveNode(id)} style={{ height: '100%' }}>
           {title ? (
-            <div className="plain-text title" style={{ fontSize: sizeForTitle(node.height) }}>
+            <div
+              className="plain-text title"
+              // Against the height the contents are laid out at, which is the
+              // node's own height only while it is drawn at normal size.
+              style={{ fontSize: sizeForTitle(node.height / contentScale(node)) }}
+            >
               {node.text}
             </div>
           ) : (

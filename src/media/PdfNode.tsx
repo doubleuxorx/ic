@@ -19,6 +19,8 @@ import type { PDFDocumentProxy } from 'pdfjs-dist';
 import workerUrl from '@/media/pdf-worker?worker&url';
 
 import { Icon } from '@/canvas/node-types/NodeShell';
+import { useCanvasStore } from '@/canvas/canvas-store';
+import { pixelRatio, renderScale } from '@/canvas/zoom';
 import { errorMessage } from '@/shared/errors';
 import { ipc } from '@/shared/ipc-types';
 import { fileUrl } from '@/workspace/workspace-store';
@@ -90,9 +92,11 @@ interface Props {
   active: boolean;
   width: number;
   height: number;
+  /** What the node draws its contents at; 1 unless the node has been scaled. */
+  scale: number;
 }
 
-const PdfNodeComponent = ({ relativePath, active, width, height }: Props) => {
+const PdfNodeComponent = ({ relativePath, active, width, height, scale }: Props) => {
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const document = useRef<DocumentSession | null>(null);
   const renderTask = useRef<{ generation: number; cancel: () => void } | null>(null);
@@ -101,6 +105,16 @@ const PdfNodeComponent = ({ relativePath, active, width, height }: Props) => {
   const [page, setPage] = useState(1);
   const [zoom, setZoom] = useState(1);
   const [error, setError] = useState<string | null>(null);
+
+  // The scale the page is really seen at: the canvas zoom and the node's own
+  // scale together. The zoom is read from the store rather than from React
+  // Flow's transform, so it settles once a gesture ends instead of asking for a
+  // new raster on every frame of a pinch.
+  const zoomedTo = useCanvasStore((state) => state.viewport.zoom) * scale;
+  const detail = renderScale(zoomedTo);
+  // A scaled node lays its contents out at the size they would have had, so the
+  // width to fit the page to is the box divided by that scale, not the box.
+  const contentWidth = width / scale;
 
   const render = useCallback(
     async (session: DocumentSession, pageNumber: number, scaleFactor: number) => {
@@ -138,13 +152,16 @@ const PdfNodeComponent = ({ relativePath, active, width, height }: Props) => {
           throw new Error('PDF page has invalid dimensions');
         }
 
-        // Fit the width of the node, then apply the user's zoom. Clamp both the
-        // backing-store dimensions and total pixels before allocating a canvas.
-        const fitScale = Math.max(0.1, (Math.max(width, 17) - 16) / unscaled.width);
-        const requestedScale = fitScale * scaleFactor;
+        // Fit the width of the node, then apply the user's zoom and the canvas
+        // scale the node is seen at, so a page shrunk on the canvas is rendered
+        // for the pixels it will really occupy once zoomed into. Clamp both the
+        // backing-store dimensions and total pixels before allocating a canvas:
+        // those clamps, not the zoom, are the point where a page stops sharpening.
+        const fitScale = Math.max(0.1, (Math.max(contentWidth, 17) - 16) / unscaled.width);
+        const requestedScale = fitScale * scaleFactor * detail;
         const requestedWidth = unscaled.width * requestedScale;
         const requestedHeight = unscaled.height * requestedScale;
-        const ratio = Math.min(Math.max(window.devicePixelRatio || 1, 1), 2);
+        const ratio = pixelRatio();
         const dimensionScale = Math.min(
           1,
           MAX_CANVAS_DIMENSION / (Math.max(requestedWidth, requestedHeight) * ratio),
@@ -156,10 +173,14 @@ const PdfNodeComponent = ({ relativePath, active, width, height }: Props) => {
           scale: requestedScale * Math.min(dimensionScale, areaScale),
         });
 
+        // The element keeps the size the page occupies on the node, which the
+        // extra detail and the clamps above must not change: they decide how
+        // many pixels back that box, so a clamped page turns soft rather than
+        // shrinking on the canvas.
         target.width = Math.max(1, Math.floor(viewport.width * ratio));
         target.height = Math.max(1, Math.floor(viewport.height * ratio));
-        target.style.width = `${Math.max(1, Math.floor(viewport.width))}px`;
-        target.style.height = `${Math.max(1, Math.floor(viewport.height))}px`;
+        target.style.width = `${Math.max(1, Math.floor(unscaled.width * fitScale * scaleFactor))}px`;
+        target.style.height = `${Math.max(1, Math.floor(unscaled.height * fitScale * scaleFactor))}px`;
 
         const context = target.getContext('2d');
         if (!context) return;
@@ -183,7 +204,7 @@ const PdfNodeComponent = ({ relativePath, active, width, height }: Props) => {
         if (renderTask.current?.generation === generation) renderTask.current = null;
       }
     },
-    [width],
+    [contentWidth, detail],
   );
 
   useEffect(() => {

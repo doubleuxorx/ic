@@ -5,12 +5,15 @@ import { describe, expect, it } from 'vitest';
 
 import {
   boundingBox,
+  contentScale,
   createId,
+  withContentScale,
   nodesInsideGroup,
   normalizeColor,
   parseCanvas,
   serializeCanvas,
   type CanvasDocument,
+  type CanvasNode,
   type GroupNode,
 } from '@/shared/json-canvas';
 
@@ -122,5 +125,49 @@ describe('JSON Canvas parsing', () => {
   it('treats an empty file as an empty canvas', () => {
     expect(parseCanvas('')).toEqual({ nodes: [], edges: [] });
     expect(() => parseCanvas('not json')).toThrow();
+  });
+});
+
+/**
+ * The format has one size per node, and it decides both how much canvas the node
+ * takes and how much room its contents lay out in. The scale below separates
+ * those, which the format has no field for, so it travels in the extra bag that
+ * carries every other key this application does not own.
+ */
+describe('the scale a node draws its contents at', () => {
+  const node = (extra?: Record<string, unknown>): CanvasNode =>
+    ({ id: 'a', type: 'text', text: '', x: 0, y: 0, width: 200, height: 100, extra }) as CanvasNode;
+
+  it('is a plain node at normal size', () => {
+    expect(contentScale(node())).toBe(1);
+    expect(withContentScale(node(), 1)).toEqual({ extra: undefined });
+  });
+
+  it('survives being written and read back', () => {
+    const document: CanvasDocument = {
+      nodes: [{ ...node(), ...withContentScale(node(), 0.4) } as CanvasNode],
+      edges: [],
+    };
+    const written = serializeCanvas(document);
+    expect(JSON.parse(written).nodes[0].icScale).toBe(0.4);
+    expect(contentScale(parseCanvas(written).nodes[0]!)).toBe(0.4);
+  });
+
+  it('leaves keys belonging to other applications alone', () => {
+    const scaled = withContentScale(node({ author: 'someone else' }), 0.5);
+    expect(scaled.extra).toEqual({ author: 'someone else', icScale: 0.5 });
+    // And clearing the scale clears only the scale.
+    expect(withContentScale({ ...node(), ...scaled } as CanvasNode, 1).extra).toEqual({
+      author: 'someone else',
+    });
+  });
+
+  it('ignores a value another application could have written', () => {
+    expect(contentScale(node({ icScale: 'huge' }))).toBe(1);
+    expect(contentScale(node({ icScale: 0 }))).toBe(1);
+    expect(contentScale(node({ icScale: Number.NaN }))).toBe(1);
+    // Clamped rather than refused: the node is still drawn.
+    expect(contentScale(node({ icScale: 1e6 }))).toBe(16);
+    expect(contentScale(node({ icScale: 1e-6 }))).toBe(0.05);
   });
 });

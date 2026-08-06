@@ -75,6 +75,32 @@ a lightweight preview: sanitized HTML for Markdown, a cached thumbnail for
 images, a single rendered page for PDFs, and a metadata-only media element for
 video and audio.
 
+### Scale
+
+The canvas zooms across the range in `zoom.ts`, which is wide enough that a node
+shrunk to a speck is a way of putting something aside rather than of discarding
+it: zooming back in has to return the document at full size. Text and Markdown
+come back for free, since a scaled DOM subtree is re-rasterized by the webview.
+Anything that rasterizes itself does not, so a raster view converts the node's
+size in canvas units into the device pixels it actually covers — `renderScale`
+for PDF.js, which re-renders the page in quantized steps, and `screenPixels` for
+images, which decide between the thumbnail and the original from the same
+number. The clamps in `PdfNode` on canvas dimensions and total pixels, not the
+zoom, are where a page stops getting sharper.
+
+Zoom is read from the store rather than from React Flow's live transform, so a
+re-render is asked for once a gesture has settled instead of on every frame of
+a pinch.
+
+A node can also be drawn at a scale of its own, stored as `icScale` and
+described in the file format document. `NodeShell` lays the header and body out
+at the size they would have had and draws them into the box, so the resize
+handles and the scale commands are two different operations: handles change how
+much room the contents have and the text reflows, commands change how large the
+same thing is drawn and nothing reflows. Only two views need to know about it —
+a PDF fits its page to the width the contents were laid out at, and a title box
+sizes its type against the same height.
+
 ### Single ownership
 
 Two pieces of state are shared with a component that also owns them, and each

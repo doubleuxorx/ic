@@ -15,6 +15,7 @@ vi.mock("@/shared/ipc-types", async () => {
 	return { ipc: fakeIpc, isDesktop: () => true };
 });
 
+import { useCanvasStore } from "@/canvas/canvas-store";
 import { ImageNode } from "@/media/ImageNode";
 import { useMediaStore } from "@/media/media-view-store";
 
@@ -24,6 +25,30 @@ import { resetStores } from "./support/stores";
 
 const source = (node: { find: (selector: string) => Element }) =>
 	node.find("img").getAttribute("src");
+
+/**
+ * Put the node on a canvas at a given zoom. Off a canvas a view has no size to
+ * reason about, so this is what the zoom-dependent behaviour needs.
+ */
+const onCanvas = (width: number, zoom: number) => {
+	useCanvasStore.setState({
+		document: {
+			nodes: [
+				{
+					id: "n1",
+					type: "file",
+					file: "Attachments/wide.png",
+					x: 0,
+					y: 0,
+					width,
+					height: 100,
+				},
+			],
+			edges: [],
+		},
+		viewport: { x: 0, y: 0, zoom },
+	});
+};
 
 beforeEach(async () => {
 	resetStores();
@@ -99,6 +124,60 @@ describe("what a node loads", () => {
 		await settle();
 
 		expect(source(node)).toBe("ic://localhost/Attachments/a%20b%23c.png");
+	});
+});
+
+/**
+ * The thumbnail is 512px across for this fixture. Whether it is enough depends
+ * on the canvas, not on the file: shrinking a node is a way of putting a picture
+ * aside, and zooming back in has to bring all of it back.
+ */
+describe("when the canvas is zoomed in", () => {
+	it("keeps the thumbnail while the node is smaller than it", async () => {
+		onCanvas(400, 1);
+		const node = await render(
+			<ImageNode nodeId="n1" relativePath="Attachments/wide.png" alt="Wide" />,
+		);
+		await settle();
+
+		expect(source(node)).toMatch(/\.app\/thumbnails\//);
+	});
+
+	it("loads the original once the node covers more pixels than the thumbnail has", async () => {
+		onCanvas(400, 8);
+		const node = await render(
+			<ImageNode nodeId="n1" relativePath="Attachments/wide.png" alt="Wide" />,
+		);
+		await settle();
+
+		expect(source(node)).toBe("ic://localhost/Attachments/wide.png");
+	});
+
+	it("swaps to the original on zoom without asking for the thumbnail again", async () => {
+		onCanvas(400, 1);
+		const node = await render(
+			<ImageNode nodeId="n1" relativePath="Attachments/wide.png" alt="Wide" />,
+		);
+		await settle();
+
+		onCanvas(400, 8);
+		await settle();
+
+		expect(source(node)).toBe("ic://localhost/Attachments/wide.png");
+		expect(backend.callsTo("thumbnail_request")).toHaveLength(1);
+	});
+
+	it("goes back to the thumbnail when the canvas zooms out again", async () => {
+		onCanvas(400, 8);
+		const node = await render(
+			<ImageNode nodeId="n1" relativePath="Attachments/wide.png" alt="Wide" />,
+		);
+		await settle();
+
+		onCanvas(400, 1);
+		await settle();
+
+		expect(source(node)).toMatch(/\.app\/thumbnails\//);
 	});
 });
 

@@ -9,7 +9,7 @@
 import { memo, type ReactNode } from "react";
 import { Handle, NodeResizer, Position } from "@xyflow/react";
 
-import type { CanvasNode } from "@/shared/json-canvas";
+import { contentScale, type CanvasNode } from "@/shared/json-canvas";
 import { contrastText, resolveColor } from "@/theme/theme-store";
 
 export type IconName =
@@ -141,13 +141,18 @@ const NodeShellInner = ({
 }: ShellProps) => {
 	const color = resolveColor(node.color);
 	const foreground = contrastText(node.color);
+	// Groups hold other nodes rather than contents of their own, so there is
+	// nothing inside one to draw at a scale of its own.
+	const scale = node.type === "group" ? 1 : contentScale(node);
 
 	return (
 		<>
 			<NodeResizer
 				isVisible={selected}
-				minWidth={minWidth}
-				minHeight={minHeight}
+				// The floors are there so a node is not resized down to nothing;
+				// a node drawn small has already agreed to be smaller than that.
+				minWidth={minWidth * scale}
+				minHeight={minHeight * scale}
 				lineClassName="resize-line"
 				handleClassName="resize-handle"
 				onResizeEnd={(_, params) =>
@@ -168,9 +173,29 @@ const NodeShellInner = ({
 					...(foreground && node.type === "group" ? { color: foreground } : {}),
 				}}
 			>
-				{header ? <div className="node-header">{header}</div> : null}
-				{actions ? <div className="node-actions">{actions}</div> : null}
-				<div className="node-body">{children}</div>
+				<div
+					className="node-content"
+					style={
+						scale === 1
+							? undefined
+							: {
+									// Laid out at the size the contents would have had, then
+									// drawn into the box: the point is that nothing reflows.
+									width: `${100 / scale}%`,
+									height: `${100 / scale}%`,
+									flex: "0 0 auto",
+									transform: `scale(${scale})`,
+								}
+					}
+				>
+					{/* Inside the scaled part, with the header: these buttons belong to
+					    the node, so a node drawn smaller is smaller all through. Only
+					    the canvas's own controls — the resize handles and the
+					    connection dots — keep their size. */}
+					{actions ? <div className="node-actions">{actions}</div> : null}
+					{header ? <div className="node-header">{header}</div> : null}
+					<div className="node-body">{children}</div>
+				</div>
 			</div>
 			{SIDES.map((side) => (
 				<Handle

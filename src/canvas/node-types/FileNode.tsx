@@ -23,7 +23,10 @@ import {
 } from "@/media/media-view-store";
 import { errorMessage } from "@/shared/errors";
 import { ipc } from "@/shared/ipc-types";
-import type { FileNode as FileCanvasNode } from "@/shared/json-canvas";
+import {
+	contentScale,
+	type FileNode as FileCanvasNode,
+} from "@/shared/json-canvas";
 import { baseName, parentDirectory } from "@/workspace/workspace-store";
 
 import { MarkdownFileView } from "./MarkdownFileView";
@@ -65,6 +68,7 @@ const FileNodeComponent = ({ id, data, selected }: NodeProps<FlowNode>) => {
 						active={interactiveActive}
 						width={node.width}
 						height={node.height}
+						scale={contentScale(node)}
 					/>
 				);
 			case "video":
