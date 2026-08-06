@@ -26,6 +26,14 @@ export default defineConfig({
   worker: {
     format: 'es',
   },
+  optimizeDeps: {
+    // Named because nothing reaches it from an entry point the dev server
+    // scans: it is imported by `src/media/pdf-worker.ts`, which the application
+    // loads as a worker. Left to discover it when a PDF first opens, vite
+    // pre-bundles it then and reloads the page underneath whatever was
+    // happening — which is what it did to the self-test on a cold cache.
+    include: ['pdfjs-dist/build/pdf.worker.min.mjs'],
+  },
   build: {
     target: 'es2022',
     // Debug assets are excluded from release builds.

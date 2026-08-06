@@ -36,7 +36,8 @@ the installed application, and physical access.
    runtime authority already checked.
 5. **No command exists for testing.** The webview self-test
    (`docs/testing.md`) reports by writing a text file through the same validated
-   `document_create` the editor uses, and its harness is selected by build mode,
+   `document_create` and `document_write` the editor uses, and its harness is
+   selected by build mode,
    so a release bundle contains neither it nor any extra privileged surface.
 
 ## Path handling

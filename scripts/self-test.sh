@@ -132,6 +132,11 @@ if ! node -e '
 ' "$report"; then
 	echo "--- application output ---" >&2
 	tail -60 "$workdir/app.log" >&2
+	# The dev server too: a check can fail because of something it did rather than
+	# anything in the window. It reloads the page the first time it pre-bundles a
+	# dependency, and that says so here and nowhere else.
+	echo "--- dev server output ---" >&2
+	tail -20 "$workdir/vite.log" >&2
 	exit 1
 fi
 

@@ -64,6 +64,27 @@ const check = async (name: string, run: () => Promise<string>): Promise<void> =>
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Write a file whether or not an earlier page load left one behind.
+ *
+ * `document_create` refuses a file that exists, and a window can be reloaded in
+ * the middle of a run — the dev server does exactly that the first time it
+ * pre-bundles a dependency. The reloaded window starts the whole run again, so
+ * the results are still a run's worth; only the file is already there, and
+ * refusing it reported a conflict that explained nothing. Nothing privileged is
+ * added for this: it is the two ordinary commands the editor uses.
+ */
+const writeFile = async (relativePath: string, contents: string): Promise<string> => {
+  try {
+    await ipc.documentCreate(relativePath, contents);
+    return 'created';
+  } catch {
+    const existing = await ipc.documentRead(relativePath);
+    await ipc.documentWrite(relativePath, existing.revision, contents);
+    return 'replaced one from an earlier page load';
+  }
+};
+
 /** Wait for something to become true, or say what it still was. */
 const until = async <T>(
   what: string,
@@ -223,7 +244,7 @@ const run = async (): Promise<void> => {
   ].map(fileNode);
 
   await check('canvas: a canvas of every kind of attachment opens', async () => {
-    await ipc.documentCreate(
+    const written = await writeFile(
       'Canvases/Self-test.canvas',
       JSON.stringify({ nodes, edges: [] }, null, 2),
     );
@@ -231,7 +252,7 @@ const run = async (): Promise<void> => {
     await until('the canvas to hold the nodes', () =>
       useCanvasStore.getState().document.nodes.length === nodes.length,
     );
-    return `${nodes.length} nodes`;
+    return `${nodes.length} nodes, ${written}`;
   });
 
   await check('image: the webview decoded a PNG served by the protocol handler', async () => {
@@ -291,12 +312,10 @@ export const start = async (): Promise<void> => {
     checks,
   };
 
-  // Written through the same validated command the editor uses; there is no
+  // Written through the same validated commands the editor uses; there is no
   // command that exists only for testing.
-  await ipc
-    .documentCreate(REPORT_FILE, `${JSON.stringify(report, null, 2)}\n`)
-    .catch((error: unknown) => {
-      console.log(`the report could not be written: ${String(error)}`);
-    });
+  await writeFile(REPORT_FILE, `${JSON.stringify(report, null, 2)}\n`).catch((error: unknown) => {
+    console.log(`the report could not be written: ${errorMessage(error)}`);
+  });
   console.log(`self-test ${report.ok ? 'passed' : 'FAILED'}`);
 };
