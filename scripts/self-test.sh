@@ -20,8 +20,9 @@ set -eu
 
 root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
 timeout_seconds="${IC_SELF_TEST_TIMEOUT:-240}"
+cd "$root"
 
-for tool in xvfb-run cargo node; do
+for tool in xvfb-run setsid cargo node; do
 	if ! command -v "$tool" >/dev/null 2>&1; then
 		echo "error: $tool is required" >&2
 		exit 2
@@ -29,16 +30,23 @@ for tool in xvfb-run cargo node; do
 done
 
 workdir="$(mktemp -d)"
+workspace=''
 vite_pid=''
 app_pid=''
 
 cleanup() {
-	# The application runs under xvfb-run, so killing the job leaves the window
-	# behind. The scratch path is unique to this run, which makes it the safe
-	# thing to match on.
-	[ -n "$app_pid" ] && kill "$app_pid" 2>/dev/null || true
-	pkill -f "ic $workspace" 2>/dev/null || true
+	# Both jobs below are started without a wrapping subshell so that these are
+	# the processes themselves: killing a subshell would leave the dev server
+	# holding port 5173 and xvfb-run's display running.
 	[ -n "$vite_pid" ] && kill "$vite_pid" 2>/dev/null || true
+	# The application runs in a session of its own, so one signal reaches
+	# xvfb-run, the X server it started and the window: xvfb-run itself passes
+	# nothing on, and its display would otherwise stay up for good.
+	[ -n "$app_pid" ] && kill -- -"$app_pid" 2>/dev/null || true
+	# Belt and braces, in case the session was already gone. The scratch path is
+	# unique to this run, which makes it the safe thing to match on — and no
+	# pattern at all is matched before there is one.
+	[ -n "$workspace" ] && pkill -f "ic $workspace" 2>/dev/null || true
 	if [ -n "${IC_SELF_TEST_KEEP:-}" ]; then
 		echo "kept $workdir"
 	else
@@ -57,18 +65,21 @@ cp "$root/tests/fixtures/documents/sample.png" "$workspace/Attachments/"
 cp "$root/tests/fixtures/documents/sample.pdf" "$workspace/Attachments/"
 printf '# Note\n\nA paragraph.\n' >"$workspace/Notes/note.md"
 
-# A fresh HOME too, so this also covers first-run state creation.
-HOME="$workdir/home"
-XDG_RUNTIME_DIR="$workdir/run"
-export HOME XDG_RUNTIME_DIR
-mkdir -p "$HOME" "$XDG_RUNTIME_DIR"
-chmod 700 "$XDG_RUNTIME_DIR"
+# A fresh HOME for the application too, so this also covers first-run state
+# creation. It goes to that one process rather than to this whole script:
+# rustup keeps its toolchains under the real HOME, and where cargo is a rustup
+# shim — as it is on a CI runner — exporting a different HOME leaves it unable
+# to choose a toolchain at all.
+app_home="$workdir/home"
+runtime_dir="$workdir/run"
+mkdir -p "$app_home" "$runtime_dir"
+chmod 700 "$runtime_dir"
 
 # The frontend is served rather than bundled: the self-test harness is selected by
 # vite's mode, and a debug binary loading a dev server is far quicker than a
 # release build with link-time optimization.
-node "$root/scripts/prepare-assets.mjs" >/dev/null
-(cd "$root" && npx vite --mode selftest --clearScreen false >"$workdir/vite.log" 2>&1) &
+node scripts/prepare-assets.mjs >/dev/null
+node_modules/.bin/vite --mode selftest --clearScreen false >"$workdir/vite.log" 2>&1 &
 vite_pid=$!
 
 waited=0
@@ -84,12 +95,13 @@ done
 
 # Built before the clock starts: a compile can take minutes and has nothing to do
 # with how long the window should need to answer.
-(cd "$root/src-tauri" && cargo build --quiet)
+cargo build --quiet --manifest-path src-tauri/Cargo.toml
 
 # A single positional argument opens it as the workspace, exactly as `ic ~/notes`
 # does, so nothing has to drive the file picker.
-(cd "$root/src-tauri" && xvfb-run -a -s '-screen 0 1400x900x24' \
-	./target/debug/ic "$workspace" >"$workdir/app.log" 2>&1) &
+setsid env HOME="$app_home" XDG_RUNTIME_DIR="$runtime_dir" \
+	xvfb-run -a -s '-screen 0 1400x900x24' \
+	src-tauri/target/debug/ic "$workspace" >"$workdir/app.log" 2>&1 &
 app_pid=$!
 
 report="$workspace/self-test-report.txt"

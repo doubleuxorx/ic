@@ -22,6 +22,7 @@
 
 import { useUiStore } from '@/app/ui-store';
 import { useCanvasStore } from '@/canvas/canvas-store';
+import { errorMessage } from '@/shared/errors';
 import { ipc } from '@/shared/ipc-types';
 import { createId, type CanvasNode } from '@/shared/json-canvas';
 import { useWorkspaceStore } from '@/workspace/workspace-store';
@@ -55,7 +56,9 @@ const check = async (name: string, run: () => Promise<string>): Promise<void> =>
   try {
     record(name, true, await run());
   } catch (error) {
-    record(name, false, error instanceof Error ? error.message : String(error));
+    // Through `errorMessage`, because a refusal from Rust is an object and a
+    // report that says "[object Object]" explains nothing.
+    record(name, false, errorMessage(error));
   }
 };
 
@@ -196,8 +199,12 @@ const run = async (): Promise<void> => {
       'the workspace to open',
       () => useWorkspaceStore.getState().workspace,
     );
-    const tree = useWorkspaceStore.getState().tree;
-    if (tree.length === 0) throw new Error('the workspace lists nothing');
+    // Separately, and not just read once: the store publishes the workspace
+    // before the listing it then asks Rust for, so the tree arrives later.
+    const tree = await until('the workspace to list its files', () => {
+      const entries = useWorkspaceStore.getState().tree;
+      return entries.length > 0 && entries;
+    });
     return `${workspace.root} with ${tree.length} entries`;
   });
 
