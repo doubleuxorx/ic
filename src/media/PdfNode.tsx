@@ -9,10 +9,14 @@
 
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
+// Before PDF.js, which calls methods WebKitGTK does not have yet.
+import '@/shared/map-upsert';
+
 import * as pdfjs from 'pdfjs-dist';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
-// The worker ships with the application; there is no CDN fallback.
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+// The worker ships with the application; there is no CDN fallback. It is PDF.js's
+// own worker with the same polyfill ahead of it, since a worker has its own globals.
+import workerUrl from '@/media/pdf-worker?worker&url';
 
 import { Icon } from '@/canvas/node-types/NodeShell';
 import { errorMessage } from '@/shared/errors';

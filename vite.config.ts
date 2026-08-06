@@ -21,6 +21,11 @@ export default defineConfig({
     host: '127.0.0.1',
     watch: { ignored: ['**/src-tauri/**'] },
   },
+  // PDF.js starts its worker with `type: "module"`, so the bundled worker has to
+  // be one.
+  worker: {
+    format: 'es',
+  },
   build: {
     target: 'es2022',
     // Debug assets are excluded from release builds.

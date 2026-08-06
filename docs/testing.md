@@ -64,7 +64,9 @@ tests there assert what the application *did*, never what it looked like.
 `sh scripts/self-test.sh` is the only test that runs in a browser, and the only
 one that can see a failure inside WebKitGTK. It exists because one shipped:
 audio and video served from `ic://` never reached a decoder on Linux, and nothing
-in the window said so.
+in the window said so. It found a second on its first run: PDF.js 6 calls
+`Map.prototype.getOrInsertComputed`, which WebKitGTK 2.48 does not have, so no
+document opened. Both are the same kind of failure — the engine, not the code.
 
 It starts the dev server in vite's `selftest` mode, runs the debug binary under
 Xvfb with a scratch workspace as its only argument, and the window then tests

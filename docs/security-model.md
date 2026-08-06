@@ -101,7 +101,11 @@ Covered by `tests/markdown.test.ts`, which asserts against the parsed DOM.
 
 ## PDFs
 
-PDF.js's core API and worker are bundled locally. The application renders pages
+PDF.js's core API and worker are bundled locally. Neither is modified: the worker
+the application ships is PDF.js's own with one thing loaded ahead of it,
+`src/shared/map-upsert.ts`, which adds `Map.prototype.getOrInsert` and its
+computed form where the engine lacks them. Without it PDF.js 6 cannot open a
+document at all on WebKitGTK 2.48. The application renders pages
 directly to a canvas; it does not instantiate PDF.js's annotation or scripting
 layers, does not ship the QuickJS sandbox assets, and disables XFA rendering.
 PDFs nevertheless remain hostile input to the parser and bundled image/colour
