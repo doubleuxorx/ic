@@ -48,6 +48,16 @@ const onDisk = () => JSON.parse(backend.contents('Canvases/Main.canvas'));
 const text = (id: string, over: Partial<CanvasNode> = {}): CanvasNode =>
   ({ id, type: 'text', text: id, x: 0, y: 0, width: 200, height: 100, ...over }) as CanvasNode;
 
+const fileNode = (id: string, file: string): CanvasNode => ({
+  id,
+  type: 'file',
+  file,
+  x: 0,
+  y: 0,
+  width: 200,
+  height: 100,
+});
+
 /** Answer whatever the application is asking, as the user would. */
 const answerModal = async (value: unknown): Promise<void> => {
   const modal = useUiStore.getState().modal;
@@ -294,6 +304,35 @@ describe('the keyboard', () => {
     await press(window, 'Enter');
 
     expect(canvas().activeNodeId).toBe('a');
+  });
+
+  it('activates PDF controls but not image, audio, or video nodes', async () => {
+    const app = await start();
+    canvas().mutate({
+      type: 'insert-nodes',
+      nodes: [
+        fileNode('image', 'Attachments/square.png'),
+        fileNode('audio', 'Attachments/tiny.mp3'),
+        fileNode('video', 'Attachments/tiny.mp4'),
+        fileNode('pdf', 'Attachments/doc.pdf'),
+      ],
+    });
+    await settle();
+
+    expect(app.query('[aria-label="Activate (Enter)"]')).toBeNull();
+    expect(app.query('[aria-label="Show controls (Enter)"]')).not.toBeNull();
+
+    for (const id of ['image', 'audio', 'video']) {
+      canvas().setSelection([id]);
+      await settle();
+      await press(window, 'Enter');
+      expect(canvas().activeNodeId).toBeNull();
+    }
+
+    canvas().setSelection(['pdf']);
+    await settle();
+    await press(window, 'Enter');
+    expect(canvas().activeNodeId).toBe('pdf');
   });
 });
 

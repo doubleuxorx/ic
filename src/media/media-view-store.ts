@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react';
 import { create } from 'zustand';
 
 import { errorMessage } from '@/shared/errors';
-import { ipc, type FileFacts } from '@/shared/ipc-types';
+import { ipc, type FileFacts, type FileKind } from '@/shared/ipc-types';
 
 export type FitMode = 'fit' | 'fill' | 'original';
 
@@ -43,8 +43,16 @@ export const useMediaStore = create<MediaStore>((set, get) => ({
     }),
 }));
 
+/** File kinds whose node has a distinct interactive mode entered with Enter. */
+export const canActivateFileKind = (kind: FileKind | null | undefined): boolean =>
+  kind === 'markdown' || kind === 'text' || kind === 'pdf';
+
 /** Cache of verified file facts, keyed by path and refreshed on external change. */
 const factsCache = new Map<string, FileFacts>();
+
+/** Synchronous facts lookup for keyboard routing after a file node has rendered. */
+export const cachedFileKind = (relativePath: string): FileKind | null =>
+  factsCache.get(relativePath)?.kind ?? null;
 
 /** Drop the cached facts for a path and wake every view showing it. */
 export const invalidateFacts = (relativePath: string): void => {

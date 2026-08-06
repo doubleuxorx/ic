@@ -49,7 +49,7 @@ afterEach(async () => {
 describe('where the bytes come from', () => {
   it('streams from the custom scheme when the webview can decode it', async () => {
     const node = await render(
-      <VideoNode nodeId="n1" relativePath="Attachments/tiny.mp4" active />,
+      <VideoNode nodeId="n1" relativePath="Attachments/tiny.mp4" />,
     );
     await settle();
 
@@ -66,7 +66,7 @@ describe('where the bytes come from', () => {
   it('streams from the loopback server when Rust reports one', async () => {
     facts('http://127.0.0.1:45678/0f9a');
     const node = await render(
-      <VideoNode nodeId="n1" relativePath="Attachments/tiny.mp4" active />,
+      <VideoNode nodeId="n1" relativePath="Attachments/tiny.mp4" />,
     );
     await settle();
 
@@ -78,7 +78,7 @@ describe('where the bytes come from', () => {
   it('encodes every segment of an awkward path', async () => {
     backend.write('Attachments/a b & c.mp4', 'pretend video');
     const node = await render(
-      <VideoNode nodeId="n1" relativePath="Attachments/a b & c.mp4" active />,
+      <VideoNode nodeId="n1" relativePath="Attachments/a b & c.mp4" />,
     );
     await settle();
 
@@ -91,7 +91,7 @@ describe('where the bytes come from', () => {
 describe('a source the webview will not take', () => {
   it('offers the system player instead of failing silently', async () => {
     const node = await render(
-      <VideoNode nodeId="n1" relativePath="Attachments/tiny.mp4" active />,
+      <VideoNode nodeId="n1" relativePath="Attachments/tiny.mp4" />,
     );
     await settle();
 
@@ -113,7 +113,7 @@ describe('a source the webview will not take', () => {
   it('is not reported as a crash', async () => {
     await import('@/boot-guard');
     const node = await render(
-      <VideoNode nodeId="n1" relativePath="Attachments/tiny.mp4" active />,
+      <VideoNode nodeId="n1" relativePath="Attachments/tiny.mp4" />,
     );
     await settle();
 
@@ -124,7 +124,7 @@ describe('a source the webview will not take', () => {
 
   it('offers the player for a container Rust already knows about', async () => {
     const node = await render(
-      <VideoNode nodeId="n1" relativePath="Attachments/tiny.mkv" active />,
+      <VideoNode nodeId="n1" relativePath="Attachments/tiny.mkv" />,
     );
     await settle();
 
@@ -136,7 +136,7 @@ describe('a source the webview will not take', () => {
   it('shows what a refused probe said', async () => {
     backend.refuse.set('Attachments/tiny.mp4', 'file type is not supported: Attachments/tiny.mp4');
     const node = await render(
-      <VideoNode nodeId="n1" relativePath="Attachments/tiny.mp4" active />,
+      <VideoNode nodeId="n1" relativePath="Attachments/tiny.mp4" />,
     );
     await settle();
 
@@ -146,13 +146,13 @@ describe('a source the webview will not take', () => {
 
   it('tries again when the node is pointed at another file', async () => {
     const node = await render(
-      <VideoNode nodeId="n1" relativePath="Attachments/tiny.mp4" active />,
+      <VideoNode nodeId="n1" relativePath="Attachments/tiny.mp4" />,
     );
     await settle();
     await fire(node.find('video'), new Event('error'));
     expect(node.query('video')).toBeNull();
 
-    await node.update(<VideoNode nodeId="n1" relativePath="Attachments/tiny.webm" active />);
+    await node.update(<VideoNode nodeId="n1" relativePath="Attachments/tiny.webm" />);
     backend.write('Attachments/tiny.webm', 'pretend video');
     await settle();
 
@@ -163,7 +163,7 @@ describe('a source the webview will not take', () => {
 describe('one node plays at a time', () => {
   it('claims playback when it starts and releases it when it stops', async () => {
     const node = await render(
-      <AudioNode nodeId="n1" relativePath="Attachments/tiny.mp3" active />,
+      <AudioNode nodeId="n1" relativePath="Attachments/tiny.mp3" />,
     );
     await settle();
 
@@ -176,7 +176,7 @@ describe('one node plays at a time', () => {
 
   it('stops when another node takes over', async () => {
     const first = await render(
-      <AudioNode nodeId="n1" relativePath="Attachments/tiny.mp3" active />,
+      <AudioNode nodeId="n1" relativePath="Attachments/tiny.mp3" />,
     );
     await settle();
     const element = media(first.host)!;
@@ -200,7 +200,7 @@ describe('one node plays at a time', () => {
    */
   it('never leaves a claim behind after the node is gone', async () => {
     const node = await render(
-      <AudioNode nodeId="n1" relativePath="Attachments/tiny.mp3" active />,
+      <AudioNode nodeId="n1" relativePath="Attachments/tiny.mp3" />,
     );
     await settle();
     await fire(media(node.host)!, new Event('play'));
@@ -216,7 +216,7 @@ describe('one node plays at a time', () => {
 describe('the controls', () => {
   it('reports the duration the element found and follows the position', async () => {
     const node = await render(
-      <VideoNode nodeId="n1" relativePath="Attachments/tiny.mp4" active />,
+      <VideoNode nodeId="n1" relativePath="Attachments/tiny.mp4" />,
     );
     await settle();
     const element = node.find<HTMLVideoElement>('video');
@@ -232,7 +232,7 @@ describe('the controls', () => {
 
   it('mutes and unmutes the element itself', async () => {
     const node = await render(
-      <VideoNode nodeId="n1" relativePath="Attachments/tiny.mp4" active />,
+      <VideoNode nodeId="n1" relativePath="Attachments/tiny.mp4" />,
     );
     await settle();
     const element = node.find<HTMLVideoElement>('video');
@@ -245,7 +245,7 @@ describe('the controls', () => {
 
   it('does not autoplay, and asks for metadata only', async () => {
     const node = await render(
-      <VideoNode nodeId="n1" relativePath="Attachments/tiny.mp4" active />,
+      <VideoNode nodeId="n1" relativePath="Attachments/tiny.mp4" />,
     );
     await settle();
     const element = node.find<HTMLVideoElement>('video');
@@ -260,7 +260,7 @@ describe('the canvas is not touched by playback', () => {
   it('leaves the document alone while a node plays', async () => {
     useCanvasStore.setState({ path: 'Canvases/Main.canvas', dirty: false });
     const node = await render(
-      <AudioNode nodeId="n1" relativePath="Attachments/tiny.mp3" active />,
+      <AudioNode nodeId="n1" relativePath="Attachments/tiny.mp3" />,
     );
     await settle();
     await fire(media(node.host)!, new Event('play'));

@@ -26,7 +26,11 @@ import {
 } from '@/command-palette/command-registry';
 import { useDocumentStore } from '@/editor/document-store';
 import { useEditorSettings } from '@/editor/editor-settings';
-import { invalidateFacts } from '@/media/media-view-store';
+import {
+  cachedFileKind,
+  canActivateFileKind,
+  invalidateFacts,
+} from '@/media/media-view-store';
 import { errorMessage } from '@/shared/errors';
 import { ipc, isDesktop, type ChangeEvent } from '@/shared/ipc-types';
 import { useWorkspaceStore, DEFAULT_DIRECTORIES } from '@/workspace/workspace-store';
@@ -276,6 +280,7 @@ const AppInner = () => {
     if (event.key === 'Enter' && current.selection.length === 1 && !current.isEditing) {
       const node = current.selection[0];
       if (node && node.type !== 'group') {
+        if (node.type === 'file' && !canActivateFileKind(cachedFileKind(node.file))) return;
         event.preventDefault();
         useCanvasStore.getState().setActiveNode(node.id);
       }

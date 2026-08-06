@@ -17,6 +17,7 @@ export type IconName =
   | 'close'
   | 'palette'
   | 'external'
+  | 'eye'
   | 'folder'
   | 'play'
   | 'pause'
@@ -46,6 +47,12 @@ const PATHS: Record<IconName, ReactNode> = {
       <path d="M8 2h4v4" />
       <path d="M12 2L6.5 7.5" />
       <path d="M11 8.5V12H2V3h3.5" />
+    </>
+  ),
+  eye: (
+    <>
+      <path d="M1.5 7S3.5 3.5 7 3.5 12.5 7 12.5 7 10.5 10.5 7 10.5 1.5 7 1.5 7z" />
+      <circle cx="7" cy="7" r="1.5" />
     </>
   ),
   folder: <path d="M1.5 11.5v-8h4l1.5 2h5.5v6z" />,

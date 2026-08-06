@@ -2,8 +2,8 @@
  * File node — a JSON Canvas `file` node referencing a workspace file.
  *
  * The kind is taken from verified facts (content sniffing in Rust), not from
- * the extension, and decides which view is mounted. Inactive nodes show a
- * lightweight preview; only the active node mounts an editor or a full viewer.
+ * the extension, and decides which view is mounted. Text files enter an editor
+ * when active, while PDFs expose their page and zoom controls.
  */
 
 import { memo } from 'react';
@@ -16,7 +16,7 @@ import { AudioNode } from '@/media/AudioNode';
 import { PdfNode } from '@/media/PdfNode';
 import { ImageNode } from '@/media/ImageNode';
 import { VideoNode } from '@/media/VideoNode';
-import { formatBytes, useFileFacts } from '@/media/media-view-store';
+import { canActivateFileKind, formatBytes, useFileFacts } from '@/media/media-view-store';
 import { errorMessage } from '@/shared/errors';
 import { ipc } from '@/shared/ipc-types';
 import type { FileNode as FileCanvasNode } from '@/shared/json-canvas';
@@ -34,6 +34,8 @@ const FileNodeComponent = ({ id, data, selected }: NodeProps<FlowNode>) => {
   const { facts, error } = useFileFacts(node.file);
 
   const kind = facts?.kind ?? 'unsupported';
+  const canActivate = canActivateFileKind(facts?.kind);
+  const interactiveActive = active && canActivate;
   const name = baseName(node.file);
 
   const body = (() => {
@@ -46,25 +48,25 @@ const FileNodeComponent = ({ id, data, selected }: NodeProps<FlowNode>) => {
           <MarkdownFileView
             relativePath={node.file}
             subpath={node.subpath}
-            active={active}
+            active={interactiveActive}
             plain={kind === 'text'}
           />
         );
       case 'image':
-        return <ImageNode nodeId={id} relativePath={node.file} active={active} alt={name} />;
+        return <ImageNode nodeId={id} relativePath={node.file} alt={name} />;
       case 'pdf':
         return (
           <PdfNode
             relativePath={node.file}
-            active={active}
+            active={interactiveActive}
             width={node.width}
             height={node.height}
           />
         );
       case 'video':
-        return <VideoNode nodeId={id} relativePath={node.file} active={active} />;
+        return <VideoNode nodeId={id} relativePath={node.file} />;
       case 'audio':
-        return <AudioNode nodeId={id} relativePath={node.file} active={active} />;
+        return <AudioNode nodeId={id} relativePath={node.file} />;
       default:
         return (
           <div className="placeholder">
@@ -84,7 +86,7 @@ const FileNodeComponent = ({ id, data, selected }: NodeProps<FlowNode>) => {
     <NodeShell
       node={node}
       selected={selected === true}
-      active={active}
+      active={interactiveActive}
       className={`file ${kind}`}
       onResizeEnd={onResizeEnd}
       header={
@@ -97,9 +99,14 @@ const FileNodeComponent = ({ id, data, selected }: NodeProps<FlowNode>) => {
         </>
       }
       actions={
-        active ? null : (
+        interactiveActive ? null : (
           <>
-            <NodeAction icon="edit" title="Activate (Enter)" onClick={() => setActiveNode(id)} />
+            {kind === 'markdown' || kind === 'text' ? (
+              <NodeAction icon="edit" title="Edit (Enter)" onClick={() => setActiveNode(id)} />
+            ) : null}
+            {kind === 'pdf' ? (
+              <NodeAction icon="eye" title="Show controls (Enter)" onClick={() => setActiveNode(id)} />
+            ) : null}
             <NodeAction icon="external" title="Open externally" onClick={openExternally} />
             <NodeAction icon="palette" title="Colour" onClick={chooseColor} />
             <NodeAction icon="close" title="Remove from canvas" onClick={remove} />
@@ -109,7 +116,9 @@ const FileNodeComponent = ({ id, data, selected }: NodeProps<FlowNode>) => {
     >
       <div
         style={{ height: '100%' }}
-        onDoubleClick={() => setActiveNode(id)}
+        onDoubleClick={() => {
+          if (canActivate) setActiveNode(id);
+        }}
       >
         {body}
       </div>

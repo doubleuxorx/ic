@@ -25,12 +25,11 @@ import { formatDuration, useMediaStore } from './media-view-store';
 export interface MediaProps {
   nodeId: string;
   relativePath: string;
-  active: boolean;
   audioOnly?: boolean;
 }
 
 /** Shared by video and audio nodes; only the element and layout differ. */
-export const MediaPlayer = ({ nodeId, relativePath, active, audioOnly = false }: MediaProps) => {
+export const MediaPlayer = ({ nodeId, relativePath, audioOnly = false }: MediaProps) => {
   const element = useRef<HTMLVideoElement | HTMLAudioElement | null>(null);
   const [probe, setProbe] = useState<MediaProbe | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -215,7 +214,7 @@ export const MediaPlayer = ({ nodeId, relativePath, active, audioOnly = false }:
           }}
         />
       </div>
-      {error && active ? <div className="vi-indicator">{error}</div> : null}
+      {error ? <div className="vi-indicator">{error}</div> : null}
     </>
   );
 };

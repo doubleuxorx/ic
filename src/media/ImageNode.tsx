@@ -2,8 +2,8 @@
  * Image view.
  *
  * Large images render from a cached thumbnail so a distant node never decodes a
- * full-resolution file. The original is only loaded when the node is active and
- * showing the image at original size.
+ * full-resolution file. The original is loaded only when the image is shown at
+ * original size.
  */
 
 import { memo, useEffect, useState } from 'react';
@@ -17,11 +17,10 @@ import { useFactsVersion, useMediaStore, type FitMode } from './media-view-store
 interface Props {
   nodeId: string;
   relativePath: string;
-  active: boolean;
   alt: string;
 }
 
-const ImageNodeComponent = ({ nodeId, relativePath, active, alt }: Props) => {
+const ImageNodeComponent = ({ nodeId, relativePath, alt }: Props) => {
   const fit: FitMode = useMediaStore((state) => state.fit[nodeId] ?? 'fit');
   const version = useFactsVersion(relativePath);
   const [source, setSource] = useState<string | null>(null);
@@ -31,7 +30,7 @@ const ImageNodeComponent = ({ nodeId, relativePath, active, alt }: Props) => {
     let cancelled = false;
     // Original size needs the real file; every other mode is happy with a
     // thumbnail, which is also what keeps large canvases cheap.
-    if (active && fit === 'original') {
+    if (fit === 'original') {
       setSource(fileUrl(relativePath));
       return () => {
         cancelled = true;
@@ -51,7 +50,7 @@ const ImageNodeComponent = ({ nodeId, relativePath, active, alt }: Props) => {
     return () => {
       cancelled = true;
     };
-  }, [relativePath, active, fit, version]);
+  }, [relativePath, fit, version]);
 
   if (!source) {
     return <div className="placeholder">{error ?? 'Loading image'}</div>;

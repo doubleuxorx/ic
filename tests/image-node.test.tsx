@@ -38,7 +38,7 @@ afterEach(async () => {
 describe('what a node loads', () => {
   it('renders a small image directly, since a thumbnail would gain nothing', async () => {
     const node = await render(
-      <ImageNode nodeId="n1" relativePath="Attachments/square.png" active alt="Square" />,
+      <ImageNode nodeId="n1" relativePath="Attachments/square.png" alt="Square" />,
     );
     await settle();
 
@@ -48,7 +48,7 @@ describe('what a node loads', () => {
 
   it('renders a large image from its thumbnail', async () => {
     const node = await render(
-      <ImageNode nodeId="n1" relativePath="Attachments/wide.png" active alt="Wide" />,
+      <ImageNode nodeId="n1" relativePath="Attachments/wide.png" alt="Wide" />,
     );
     await settle();
 
@@ -62,7 +62,7 @@ describe('what a node loads', () => {
   it('loads the full file when the node is showing it at original size', async () => {
     useMediaStore.getState().setFit('n1', 'original');
     const node = await render(
-      <ImageNode nodeId="n1" relativePath="Attachments/wide.png" active alt="Wide" />,
+      <ImageNode nodeId="n1" relativePath="Attachments/wide.png" alt="Wide" />,
     );
     await settle();
 
@@ -73,7 +73,7 @@ describe('what a node loads', () => {
   it('goes back to the thumbnail when the fit mode changes back', async () => {
     useMediaStore.getState().setFit('n1', 'original');
     const node = await render(
-      <ImageNode nodeId="n1" relativePath="Attachments/wide.png" active alt="Wide" />,
+      <ImageNode nodeId="n1" relativePath="Attachments/wide.png" alt="Wide" />,
     );
     await settle();
 
@@ -87,7 +87,7 @@ describe('what a node loads', () => {
   it('encodes an awkward name rather than building a broken URL', async () => {
     backend.write('Attachments/a b#c.png', 'pretend png', { width: 10, height: 10 });
     const node = await render(
-      <ImageNode nodeId="n1" relativePath="Attachments/a b#c.png" active alt="Odd" />,
+      <ImageNode nodeId="n1" relativePath="Attachments/a b#c.png" alt="Odd" />,
     );
     await settle();
 
@@ -103,7 +103,7 @@ describe('when it cannot be shown', () => {
       'file type is not supported: Attachments/wide.png',
     );
     const node = await render(
-      <ImageNode nodeId="n1" relativePath="Attachments/wide.png" active alt="Wide" />,
+      <ImageNode nodeId="n1" relativePath="Attachments/wide.png" alt="Wide" />,
     );
     await settle();
 
@@ -112,7 +112,7 @@ describe('when it cannot be shown', () => {
 
   it('says so on the node when the image itself will not display', async () => {
     const node = await render(
-      <ImageNode nodeId="n1" relativePath="Attachments/square.png" active alt="Square" />,
+      <ImageNode nodeId="n1" relativePath="Attachments/square.png" alt="Square" />,
     );
     await settle();
 
@@ -125,7 +125,7 @@ describe('when it cannot be shown', () => {
   it('does not report a broken image as a crash', async () => {
     await import('@/boot-guard');
     const node = await render(
-      <ImageNode nodeId="n1" relativePath="Attachments/square.png" active alt="Square" />,
+      <ImageNode nodeId="n1" relativePath="Attachments/square.png" alt="Square" />,
     );
     await settle();
 
