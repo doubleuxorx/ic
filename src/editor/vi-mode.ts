@@ -54,23 +54,27 @@ interface ViState {
   mode: ViMode;
   /** Pending operator, e.g. the first `d` of `dd`. */
   pending: string;
+  /** Decimal line count waiting for an uppercase `G`. */
+  count: string;
 }
 
 export const setViMode = StateEffect.define<ViMode>();
 
 export const viStateField = StateField.define<ViState>({
-  create: () => ({ mode: 'normal', pending: '' }),
+  create: () => ({ mode: 'normal', pending: '', count: '' }),
   update(value, transaction) {
     let next = value;
     for (const effect of transaction.effects) {
-      if (effect.is(setViMode)) next = { mode: effect.value, pending: '' };
+      if (effect.is(setViMode)) next = { mode: effect.value, pending: '', count: '' };
       if (effect.is(setPending)) next = { ...next, pending: effect.value };
+      if (effect.is(setCount)) next = { ...next, count: effect.value };
     }
     return next;
   },
 });
 
 const setPending = StateEffect.define<string>();
+const setCount = StateEffect.define<string>();
 
 export const viMode = (state: EditorState): ViMode =>
   state.field(viStateField, false)?.mode ?? 'insert';
@@ -92,6 +96,20 @@ const openLine = (below: boolean): Command => (view) => {
     scrollIntoView: true,
   });
   return enter(view, 'insert');
+};
+
+/** Uppercase G uses a one-based count, or the final line when no count was given. */
+const goToLine = (view: EditorView, count: string, visual: boolean): boolean => {
+  const requested = count.length > 0 ? Number(count) : view.state.doc.lines;
+  const lineNumber = Math.max(1, Math.min(requested, view.state.doc.lines));
+  const line = view.state.doc.line(lineNumber);
+  const firstNonBlank = line.text.search(/\S/);
+  const position = line.from + Math.max(0, firstNonBlank);
+  const selection = visual
+    ? EditorSelection.range(view.state.selection.main.anchor, position)
+    : EditorSelection.cursor(position);
+  view.dispatch({ selection, effects: setCount.of(''), scrollIntoView: true });
+  return true;
 };
 
 /** Movement keys, in normal and visual (selection-extending) form. */
@@ -128,6 +146,14 @@ const handleNormalKey = (view: EditorView, event: KeyboardEvent): boolean => {
     }
     return true; // an incomplete operator swallows the next key
   }
+
+  const digit = key >= '0' && key <= '9';
+  if ((state.count.length > 0 && digit) || (key >= '1' && key <= '9')) {
+    view.dispatch({ effects: setCount.of(`${state.count}${key}`) });
+    return true;
+  }
+  if (key === 'G') return goToLine(view, state.count, visual);
+  if (state.count.length > 0) view.dispatch({ effects: setCount.of('') });
 
   const motion = MOTIONS[key];
   if (motion) {
