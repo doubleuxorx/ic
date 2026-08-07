@@ -143,7 +143,7 @@ mod tests {
 #[cfg(test)]
 mod watching {
     use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     use serde_json::json;
     use tauri::Listener;
@@ -168,10 +168,23 @@ mod watching {
             Changes { events }
         }
 
-        fn next(&self) -> String {
-            self.events
-                .recv_timeout(REPORTED)
-                .expect("a change is reported")
+        /// A change to `path` is reported, whether or not it arrives first.
+        ///
+        /// What else the watcher mentions along the way is not this test's
+        /// business: a platform is free to report the directory holding a file
+        /// as well as the file, in either order, and on Windows it does. That
+        /// nothing spurious is reported is what [`Changes::nothing`] covers.
+        fn reports(&self, path: &str) {
+            let deadline = Instant::now() + REPORTED;
+            let mut seen: Vec<String> = Vec::new();
+            while let Some(left) = deadline.checked_duration_since(Instant::now()) {
+                match self.events.recv_timeout(left) {
+                    Ok(payload) if payload.contains(path) => return,
+                    Ok(payload) => seen.push(payload),
+                    Err(_) => break,
+                }
+            }
+            panic!("{path} was not reported, only {seen:?}");
         }
 
         /// Nothing at all is reported for as long as anything would have been.
@@ -195,7 +208,7 @@ mod watching {
         let changes = Changes::of(&app);
 
         std::fs::write(app.path("Notes/note.md"), b"# Changed elsewhere\n").unwrap();
-        assert!(changes.next().contains("Notes/note.md"));
+        changes.reports("Notes/note.md");
     }
 
     #[test]
@@ -204,11 +217,12 @@ mod watching {
         let changes = Changes::of(&app);
 
         std::fs::write(app.path("Notes/added.md"), b"# Added\n").unwrap();
-        assert!(changes.next().contains("Notes/added.md"));
+        changes.reports("Notes/added.md");
 
+        // Without this the create's report would answer for the delete's.
         changes.settle();
         std::fs::remove_file(app.path("Notes/added.md")).unwrap();
-        assert!(changes.next().contains("Notes/added.md"));
+        changes.reports("Notes/added.md");
     }
 
     /// The loop this guards against: the inotify backend reports opens as well as
