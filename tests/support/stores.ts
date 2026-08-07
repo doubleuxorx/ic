@@ -9,6 +9,7 @@
 
 import type { StoreApi } from 'zustand';
 
+import { useDebugStore } from '@/app/debug-store';
 import { useUiStore } from '@/app/ui-store';
 import { useCanvasStore } from '@/canvas/canvas-store';
 import { setFlowInstance } from '@/canvas/flow-bridge';
@@ -20,6 +21,7 @@ import { useWorkspaceStore } from '@/workspace/workspace-store';
 
 const stores = [
   useUiStore,
+  useDebugStore,
   useCanvasStore,
   useDocumentStore,
   useEditorSettings,
@@ -32,6 +34,10 @@ const initial = stores.map((store) => ({ ...store.getState() }));
 
 export const resetStores = (): void => {
   stores.forEach((store, index) => store.setState(initial[index] as never, true));
+  // Debug mode also puts things outside the store — an attribute on the
+  // document and the handles on `window` — so it is turned off through its own
+  // action rather than by restoring its state.
+  useDebugStore.getState().set(false);
   setFlowInstance(null);
 };
 

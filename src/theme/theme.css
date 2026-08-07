@@ -953,6 +953,30 @@ body {
   color: var(--accent-contrast);
 }
 
+/* Label and value pairs in the information panel. */
+.info-list {
+  margin: 0;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px 14px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.info-list > div {
+  display: contents;
+}
+
+.info-list dt {
+  color: var(--text-secondary);
+}
+
+.info-list dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
 .color-grid {
   display: flex;
   gap: 8px;
@@ -1017,6 +1041,16 @@ body {
 
 .status-bar .dirty {
   color: var(--accent);
+}
+
+/* Debug mode: the status bar stops fading out and stays readable. */
+:root[data-debug='on'] .status-bar {
+  opacity: 1;
+}
+
+.status-bar .debug {
+  font-family: var(--font-mono);
+  opacity: 0.8;
 }
 
 .toast {

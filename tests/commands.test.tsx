@@ -27,13 +27,15 @@ vi.mock('@/shared/ipc-types', async () => {
 const chooseInDialog = vi.fn<() => Promise<string | null>>();
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: () => chooseInDialog() }));
 
-import { useUiStore } from '@/app/ui-store';
+import { useUiStore, type InfoRow } from '@/app/ui-store';
 import { appCommands, registerAppCommands } from '@/app/commands';
+import { useDebugStore } from '@/app/debug-store';
 import { selectedNodes, useCanvasStore } from '@/canvas/canvas-store';
 import { allCommands, runCommand, type CommandContext } from '@/command-palette/command-registry';
 import { useEditorSettings } from '@/editor/editor-settings';
 import { useDocumentStore } from '@/editor/document-store';
 import { useMediaStore } from '@/media/media-view-store';
+import { BUILD } from '@/shared/build-info';
 import type { CanvasEdge, CanvasNode } from '@/shared/json-canvas';
 import { useThemeStore } from '@/theme/theme-store';
 import { useWorkspaceStore } from '@/workspace/workspace-store';
@@ -69,6 +71,21 @@ const answer = async (value: unknown): Promise<void> => {
   (modal.resolve as (value: unknown) => void)(value);
   await Promise.resolve();
 };
+
+/** Take the rows out of the information panel, then close it as the user would. */
+const shownRows = async (): Promise<InfoRow[]> => {
+  for (let attempt = 0; attempt < 10 && !useUiStore.getState().modal; attempt += 1) {
+    await Promise.resolve();
+  }
+  const modal = useUiStore.getState().modal;
+  if (modal?.kind !== 'info') throw new Error(`showed ${modal?.kind ?? 'nothing'}`);
+  modal.resolve(null);
+  await Promise.resolve();
+  return modal.rows;
+};
+
+const row = (rows: InfoRow[], label: string): string | undefined =>
+  rows.find((entry) => entry.label === label)?.value;
 
 /** Run a command, answering whatever it asks along the way. */
 const run = async (
@@ -726,6 +743,38 @@ covers('palette.open', async () => {
   expect(useUiStore.getState().paletteOpen).toBe(true);
   await run('palette.open');
   expect(useUiStore.getState().paletteOpen).toBe(false);
+});
+
+covers('debug.toggle', async () => {
+  await run('debug.toggle');
+  expect(useDebugStore.getState().enabled).toBe(true);
+  // The status bar stops fading out, which is a stylesheet rule on this.
+  expect(document.documentElement.dataset.debug).toBe('on');
+  // And the stores are reachable from the webview console.
+  expect((window as { ic?: unknown }).ic).toBeDefined();
+
+  await run('debug.toggle');
+  expect(useDebugStore.getState().enabled).toBe(false);
+  expect(document.documentElement.dataset.debug).toBeUndefined();
+  expect((window as { ic?: unknown }).ic).toBeUndefined();
+});
+
+covers('help.information', async () => {
+  await openCanvas();
+  given({ nodes: [text('a'), text('b')] });
+
+  const done = runCommand('help.information', context());
+  const rows = await shownRows();
+  await done;
+
+  // The version the desktop application reports about itself, not the bundle's.
+  expect(row(rows, 'Version')).toBe(backend.facts.version);
+  expect(row(rows, 'Commit')).toBe(BUILD.commit);
+  expect(row(rows, 'Workspace')).toBe('/workspace');
+  expect(row(rows, 'Canvas')).toBe('Canvases/Main.canvas');
+  expect(row(rows, 'Contents')).toBe('2 nodes, 0 edges');
+  // The internals are noise until someone is debugging.
+  expect(rows.some((entry) => entry.label === 'Media origin')).toBe(false);
 });
 
 /* ------------------------------------------------------------------ the tests */

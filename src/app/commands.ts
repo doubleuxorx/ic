@@ -16,6 +16,7 @@ import { registerCommands, type AppCommand, type CommandContext } from '@/comman
 import { useEditorSettings } from '@/editor/editor-settings';
 import { useMediaStore, type FitMode } from '@/media/media-view-store';
 import { useDocumentStore } from '@/editor/document-store';
+import { versionLabel } from '@/shared/build-info';
 import { errorMessage } from '@/shared/errors';
 import { ipc } from '@/shared/ipc-types';
 import {
@@ -37,7 +38,9 @@ import {
   useWorkspaceStore,
 } from '@/workspace/workspace-store';
 
-import { confirmWith, pickColor, pickFile, promptFor, toast, useUiStore } from './ui-store';
+import { useDebugStore } from './debug-store';
+import { informationRows } from './information';
+import { confirmWith, pickColor, pickFile, promptFor, showInfo, toast, useUiStore } from './ui-store';
 
 /** Nodes and edges cut or copied, kept inside the application. */
 let clipboard: { nodes: CanvasNode[]; edges: CanvasEdge[] } | null = null;
@@ -838,6 +841,22 @@ const commands: AppCommand[] = [
     },
   },
   {
+    id: 'debug.toggle',
+    title: 'Toggle debug mode',
+    category: 'Settings',
+    aliases: ['developer', 'diagnostics', 'version', 'verbose'],
+    isAvailable: () => true,
+    execute: () => {
+      useDebugStore.getState().toggle();
+      const enabled = useDebugStore.getState().enabled;
+      toast(
+        enabled
+          ? `Debug mode on — ${versionLabel()}, stores on window.ic`
+          : 'Debug mode off',
+      );
+    },
+  },
+  {
     id: 'palette.open',
     title: 'Command palette',
     category: 'Settings',
@@ -845,6 +864,18 @@ const commands: AppCommand[] = [
     aliases: ['commands', 'run'],
     isAvailable: () => true,
     execute: () => useUiStore.getState().togglePalette(),
+  },
+
+  /* ---------------------------------------------------------------- about */
+  {
+    id: 'help.information',
+    title: 'Information',
+    category: 'Help',
+    aliases: ['about', 'version', 'build', 'commit', 'diagnostics'],
+    isAvailable: () => true,
+    execute: async () => {
+      await showInfo('Information', informationRows());
+    },
   },
 ];
 

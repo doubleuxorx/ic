@@ -39,6 +39,8 @@ import {
 } from "@/workspace/workspace-store";
 
 import { addFileNode, registerAppCommands } from "./commands";
+import { useDebugStore } from "./debug-store";
+import { DebugStatus } from "./DebugStatus";
 import { ModalHost } from "./ModalHost";
 import { confirmWith, toast, useUiStore } from "./ui-store";
 
@@ -80,6 +82,7 @@ const AppInner = () => {
 	const toasts = useUiStore((state) => state.toasts);
 	const paletteOpen = useUiStore((state) => state.paletteOpen);
 	const modal = useUiStore((state) => state.modal);
+	const debug = useDebugStore((state) => state.enabled);
 	const [ready, setReady] = useState(false);
 
 	useEffect(() => {
@@ -362,6 +365,7 @@ const AppInner = () => {
 				{selectionIds.length > 0 ? (
 					<span>{selectionIds.length} selected</span>
 				) : null}
+				{debug ? <DebugStatus /> : null}
 			</div>
 
 			{conflict ? (

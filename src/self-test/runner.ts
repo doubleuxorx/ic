@@ -110,6 +110,7 @@ const answerModals = (): void => {
     if (modal.kind === 'confirm') modal.resolve(false);
     else if (modal.kind === 'prompt') modal.resolve(null);
     else if (modal.kind === 'file') modal.resolve(null);
+    else if (modal.kind === 'info') modal.resolve(null);
     else modal.resolve(undefined);
   });
 };

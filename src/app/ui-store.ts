@@ -42,7 +42,25 @@ export interface FileRequest {
   resolve: (relativePath: string | null) => void;
 }
 
-export type ModalRequest = PromptRequest | ConfirmRequest | ColorRequest | FileRequest;
+export interface InfoRow {
+  label: string;
+  value: string;
+}
+
+/** Read-only: a list of facts about the application, with nothing to answer. */
+export interface InfoRequest {
+  kind: 'info';
+  title: string;
+  rows: InfoRow[];
+  resolve: (value: null) => void;
+}
+
+export type ModalRequest =
+  | PromptRequest
+  | ConfirmRequest
+  | ColorRequest
+  | FileRequest
+  | InfoRequest;
 
 export interface Toast {
   id: number;
@@ -122,6 +140,9 @@ export const pickColor = (title = 'Colour'): Promise<CanvasColor | null | undefi
 
 export const pickFile = (title: string, kinds: FileKind[]): Promise<string | null> =>
   ask<string | null>((resolve) => ({ kind: 'file', title, kinds, resolve }));
+
+export const showInfo = (title: string, rows: InfoRow[]): Promise<null> =>
+  ask<null>((resolve) => ({ kind: 'info', title, rows, resolve }));
 
 export const toast = (message: string, tone: Toast['tone'] = 'info'): void =>
   useUiStore.getState().pushToast(message, tone);

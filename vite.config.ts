@@ -1,8 +1,35 @@
 /// <reference types="vitest/config" />
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
 
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
+
+const packageJson = JSON.parse(
+  readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf8'),
+) as { version: string };
+
+/**
+ * The commit the bundle was built from, `-dirty` when the tree had uncommitted
+ * changes. A build from a source tarball has no repository, so this is allowed
+ * to fail and say so rather than break the build.
+ */
+const commit = (): string => {
+  const git = (...args: string[]): string =>
+    execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  try {
+    return `${git('rev-parse', '--short', 'HEAD')}${git('status', '--porcelain') ? '-dirty' : ''}`;
+  } catch {
+    return 'unknown';
+  }
+};
+
+// `SOURCE_DATE_EPOCH` is honoured so a release build stays reproducible.
+const buildTime = (): string => {
+  const epoch = Number(process.env.SOURCE_DATE_EPOCH);
+  return new Date(Number.isFinite(epoch) && epoch > 0 ? epoch * 1000 : Date.now()).toISOString();
+};
 
 // Tauri expects a fixed dev port. Nothing here may reference a remote origin:
 // every asset is bundled locally.
@@ -15,6 +42,13 @@ export default defineConfig({
   },
   base: './',
   clearScreen: false,
+  // What the running application knows about the build it came from. See
+  // `src/shared/build-info.ts`.
+  define: {
+    __APP_VERSION__: JSON.stringify(packageJson.version),
+    __APP_COMMIT__: JSON.stringify(commit()),
+    __APP_BUILD_TIME__: JSON.stringify(buildTime()),
+  },
   server: {
     port: 5173,
     strictPort: true,

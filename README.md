@@ -91,6 +91,8 @@ does not touch it, and deleting `.app` loses nothing but caches.
 - Command palette with fuzzy search and shortcut display
 - Operation-based undo/redo, debounced autosave, atomic writes, crash recovery
 - External-edit detection with explicit conflict resolution
+- `Information` in the palette: version, commit and what is open, copyable for a
+  bug report; `Toggle debug mode` keeps the build in the status bar
 
 Not in this release, deliberately: scripting, plugins, program nodes,
 collaboration, sync, mobile, freehand drawing, embedded web pages. See

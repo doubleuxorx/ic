@@ -10,7 +10,32 @@ import { useEffect, useRef, useState } from 'react';
 import { PRESET_COLORS, normalizeColor } from '@/shared/json-canvas';
 import { FileTree } from '@/workspace/FileTree';
 
-import { useUiStore } from './ui-store';
+import { toast, useUiStore, type InfoRow } from './ui-store';
+
+/** Everything in the panel as text, for pasting into a bug report. */
+const asText = (rows: InfoRow[]): string =>
+  rows.map((row) => `${row.label}: ${row.value}`).join('\n');
+
+/** A webview without clipboard access throws on the property, not the call. */
+const copy = async (rows: InfoRow[]): Promise<void> => {
+  try {
+    await navigator.clipboard.writeText(asText(rows));
+    toast('Copied');
+  } catch {
+    toast('Could not copy to the clipboard', 'error');
+  }
+};
+
+const InfoRows = ({ rows }: { rows: InfoRow[] }) => (
+  <dl className="info-list">
+    {rows.map((row) => (
+      <div key={row.label}>
+        <dt>{row.label}</dt>
+        <dd>{row.value}</dd>
+      </div>
+    ))}
+  </dl>
+);
 
 const PresetSwatches = ({ onPick }: { onPick: (value: string | null) => void }) => (
   <div className="color-grid">
@@ -107,6 +132,8 @@ export const ModalHost = () => {
             />
           ) : null}
 
+          {modal.kind === 'info' ? <InfoRows rows={modal.rows} /> : null}
+
           {modal.kind === 'color' ? (
             <>
               <PresetSwatches onPick={(preset) => modal.resolve(preset)} />
@@ -130,8 +157,17 @@ export const ModalHost = () => {
 
           <div className="row">
             <button type="button" onClick={dismiss}>
-              Cancel
+              {modal.kind === 'info' ? 'Close' : 'Cancel'}
             </button>
+            {modal.kind === 'info' ? (
+              <button
+                type="button"
+                className="primary"
+                onClick={() => void copy(modal.rows)}
+              >
+                Copy
+              </button>
+            ) : null}
             {modal.kind === 'prompt' ? (
               <button type="button" className="primary" onClick={() => modal.resolve(value)}>
                 {modal.confirmLabel ?? 'OK'}
