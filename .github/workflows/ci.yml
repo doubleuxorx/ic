@@ -28,9 +28,9 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: yarn
@@ -91,9 +91,9 @@ jobs:
     name: dependency audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: yarn
@@ -123,9 +123,9 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: yarn
@@ -264,7 +264,7 @@ jobs:
       # comes out of it. Each names its format's directory instead of globbing
       # the whole bundle tree, so a target that silently stops being built
       # fails the job here rather than going missing from a release.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: matrix.os == 'ubuntu-latest'
         with:
           # glibc, as opposed to the AppImage the Alpine job below builds.
@@ -272,14 +272,14 @@ jobs:
           path: src-tauri/target/release/bundle/appimage/*.AppImage
           if-no-files-found: error
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: matrix.os == 'ubuntu-latest'
         with:
           name: ic-deb-x86_64
           path: src-tauri/target/release/bundle/deb/*.deb
           if-no-files-found: error
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: matrix.os == 'ubuntu-latest'
         with:
           name: ic-rpm-x86_64
@@ -289,14 +289,14 @@ jobs:
       # The runner is Apple silicon, and the .app this wraps is not uploaded
       # separately: upload-artifact does not carry executable bits, so the
       # image is the only form of it worth handing out.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: matrix.os == 'macos-latest'
         with:
           name: ic-dmg-aarch64
           path: src-tauri/target/release/bundle/dmg/*.dmg
           if-no-files-found: error
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: matrix.os == 'windows-latest'
         with:
           name: ic-nsis-x86_64
@@ -315,15 +315,15 @@ jobs:
       MUSL_CARGO_HOME: /home/runner/.cache/musl-cargo
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       # GitHub has no hosted Alpine runner. Build in a native x86_64 Alpine
       # container on the hosted Ubuntu runner instead. Installing the WebKitGTK
       # toolchain dominates this job, so the image layers are cached.
       - name: Build Alpine AppImage builder
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         env:
           # Otherwise every run leaves a *.dockerbuild build record next to the
           # artifacts anyone downloading a release build has to pick through.
@@ -340,7 +340,7 @@ jobs:
       # Kept separate from the other jobs' caches: this is a musl target built
       # by Alpine's rustc, so none of it is interchangeable with their output.
       - name: Cache musl Rust build
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             /home/runner/.cache/musl-cargo
@@ -384,7 +384,7 @@ jobs:
               exec /workspace/scripts/test-appimage.sh \
                 /workspace/src-tauri/target/release/bundle/appimage-musl/ic-*.AppImage'
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ic-appimage-x86_64-musl
           path: src-tauri/target/release/bundle/appimage-musl/*.AppImage
@@ -399,7 +399,7 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Regenerate source manifests
         run: sh flatpak/generate-sources.sh
@@ -426,7 +426,7 @@ jobs:
       options: --privileged
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build Flatpak
         # v6, pinned like the Alpine builder image below.
