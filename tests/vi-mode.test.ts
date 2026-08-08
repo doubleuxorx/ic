@@ -4,7 +4,7 @@ import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { viLite } from "@/editor/vi-mode";
+import { viLite, viMode } from "@/editor/vi-mode";
 
 import { press } from "./support/render";
 
@@ -81,5 +81,69 @@ describe("Vi G motions", () => {
 		await press(view.contentDOM, "g");
 
 		expect(cursorLine(view)).toBe(2);
+	});
+});
+
+describe("Vi r", () => {
+	it("writes the next key over the character under the cursor", async () => {
+		const view = editor("cat");
+
+		await press(view.contentDOM, "r");
+		await press(view.contentDOM, "b");
+
+		expect(view.state.doc.toString()).toBe("bat");
+		// The cursor stays on the character it replaced, and the mode does not
+		// change: `r` is a one-shot, not a way into insert mode.
+		expect(view.state.selection.main.head).toBe(0);
+		expect(viMode(view.state)).toBe("normal");
+	});
+
+	it("takes a command key as plain text", async () => {
+		const view = editor("cat");
+
+		await press(view.contentDOM, "r");
+		await press(view.contentDOM, "i");
+
+		expect(view.state.doc.toString()).toBe("iat");
+		expect(viMode(view.state)).toBe("normal");
+	});
+
+	it("cancels on Escape and hands the next key back to normal mode", async () => {
+		const view = editor("cat");
+
+		await press(view.contentDOM, "r");
+		await press(view.contentDOM, "Escape");
+		expect(view.state.doc.toString()).toBe("cat");
+
+		await press(view.contentDOM, "x");
+		expect(view.state.doc.toString()).toBe("at");
+	});
+
+	it("replaces nothing at the end of a line", async () => {
+		const view = editor("cat\ndog");
+		view.dispatch({
+			selection: EditorSelection.cursor(view.state.doc.line(1).to),
+		});
+
+		await press(view.contentDOM, "r");
+		await press(view.contentDOM, "b");
+
+		expect(view.state.doc.toString()).toBe("cat\ndog");
+	});
+
+	it("overwrites a visual selection but keeps its line breaks", async () => {
+		const view = editor("cat\ndog");
+
+		await press(view.contentDOM, "v");
+		for (let index = 0; index < 5; index += 1) {
+			await press(view.contentDOM, "l");
+		}
+		await press(view.contentDOM, "r");
+		await press(view.contentDOM, "-");
+
+		// The selection reaches up to the cursor and not past it, as it does for
+		// visual `x` and `d`.
+		expect(view.state.doc.toString()).toBe("---\n-og");
+		expect(viMode(view.state)).toBe("normal");
 	});
 });

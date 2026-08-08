@@ -52,7 +52,7 @@ export type ViMode = "insert" | "normal" | "visual";
 
 interface ViState {
 	mode: ViMode;
-	/** Pending operator, e.g. the first `d` of `dd`. */
+	/** Key that claims the next one: the first `d` of `dd`, or an `r`. */
 	pending: string;
 	/** Decimal line count waiting for an uppercase `G`. */
 	count: string;
@@ -119,6 +119,42 @@ const goToLine = (
 	return true;
 };
 
+/**
+ * Writes one character over the character under the cursor and stays in normal
+ * mode — the second half of `r`. In visual mode the whole selection is
+ * overwritten, apart from its line breaks: replacing those would join the lines,
+ * and vi keeps the shape of the selected block.
+ */
+const replaceChar = (
+	view: EditorView,
+	character: string,
+	visual: boolean,
+): boolean => {
+	const { state } = view;
+	const range = state.selection.main;
+
+	if (visual) {
+		const insert = state
+			.sliceDoc(range.from, range.to)
+			.replace(/[^\n]/gu, character);
+		view.dispatch({
+			changes: { from: range.from, to: range.to, insert },
+			selection: EditorSelection.cursor(range.from),
+		});
+		return enter(view, "normal");
+	}
+
+	// At the end of a line there is no character under the cursor, and vi replaces
+	// nothing rather than pulling the next line up.
+	const line = state.doc.lineAt(range.head);
+	if (range.head >= line.to) return true;
+	view.dispatch({
+		changes: { from: range.head, to: range.head + 1, insert: character },
+		selection: EditorSelection.cursor(range.head),
+	});
+	return true;
+};
+
 /** Movement keys, in normal and visual (selection-extending) form. */
 const MOTIONS: Record<string, { move: Command; extend: Command }> = {
 	h: { move: cursorCharLeft, extend: selectCharLeft },
@@ -139,6 +175,17 @@ const handleNormalKey = (view: EditorView, event: KeyboardEvent): boolean => {
 	// A physical Shift+G produces a Shift keydown before the G keydown. Keep a
 	// pending line count across that modifier event.
 	if (key === "Shift") return false;
+
+	// A pending `r` claims the next key before any command can: the key stands for
+	// the character to write, so even `d` or `i` is only text here.
+	if (state.pending === "r") {
+		view.dispatch({ effects: setPending.of("") });
+		if (event.ctrlKey || event.metaKey || event.altKey) return true;
+		if (key === "Enter") return replaceChar(view, "\n", state.mode === "visual");
+		// Escape cancels, and so does anything else that is not a character.
+		if (key.length !== 1) return true;
+		return replaceChar(view, key, state.mode === "visual");
+	}
 
 	if (event.ctrlKey && (key === "r" || key === "R")) {
 		redo(view);
@@ -201,6 +248,9 @@ const handleNormalKey = (view: EditorView, event: KeyboardEvent): boolean => {
 				return enter(view, "normal");
 			}
 			view.dispatch({ effects: setPending.of("d") });
+			return true;
+		case "r":
+			view.dispatch({ effects: setPending.of("r") });
 			return true;
 		case "u":
 			undo(view);

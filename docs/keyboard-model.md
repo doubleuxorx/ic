@@ -110,9 +110,10 @@ recreated and nothing is lost.
 | `w` `b` | Move by word |
 | `0` `$` | Line start / end |
 | `x` | Delete character |
+| `r` | Replace the character under the cursor with the next key |
 | `dd` | Delete line |
 | `u` / `Ctrl+R` | Undo / redo |
-| `v` | Visual selection; motions extend it, `x` or `d` deletes it |
+| `v` | Visual selection; motions extend it, `x` or `d` deletes it, `r` overwrites it |
 
 Unbound printable keys are swallowed so normal mode never inserts text.
 Registers, macros, marks, text objects, operator composition, ex commands, Vim
