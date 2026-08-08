@@ -22,10 +22,18 @@ interface Props {
   relativePath: string;
   subpath?: string;
   active: boolean;
+  /** The selected node is the one being read, so its contents take the wheel. */
+  selected: boolean;
   plain?: boolean;
 }
 
-const MarkdownFileViewComponent = ({ relativePath, subpath, active, plain }: Props) => {
+const MarkdownFileViewComponent = ({
+  relativePath,
+  subpath,
+  active,
+  selected,
+  plain,
+}: Props) => {
   const doc = useDocumentStore((state) => state.docs[relativePath]);
   const open = useDocumentStore((state) => state.open);
   const setContents = useDocumentStore((state) => state.setContents);
@@ -87,11 +95,18 @@ const MarkdownFileViewComponent = ({ relativePath, subpath, active, plain }: Pro
   const visible = sliceSubpath(doc.contents, subpath);
 
   return plain ? (
-    <div className="plain-text" style={{ alignItems: 'flex-start' }}>
+    <div
+      className={selected ? 'plain-text scroll nowheel' : 'plain-text'}
+      style={{ alignItems: 'flex-start' }}
+    >
       {visible}
     </div>
   ) : (
-    <MarkdownPreview source={visible} baseDirectory={parentDirectory(relativePath)} />
+    <MarkdownPreview
+      source={visible}
+      baseDirectory={parentDirectory(relativePath)}
+      scrollable={selected}
+    />
   );
 };
 

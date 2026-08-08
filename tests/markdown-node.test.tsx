@@ -16,7 +16,9 @@ vi.mock('@/shared/ipc-types', async () => {
 });
 
 import { useUiStore } from '@/app/ui-store';
+import { MarkdownFileView } from '@/canvas/node-types/MarkdownFileView';
 import { MarkdownPreview } from '@/canvas/node-types/MarkdownPreview';
+import { horizontalWheel } from '@/canvas/wheel';
 
 import { backend, openFixtureWorkspace } from './support/fake-ipc';
 import { cleanup, click, render, settle } from './support/render';
@@ -93,6 +95,62 @@ describe('what a preview renders', () => {
     // The remote one keeps its place in the text but has nothing to fetch, so
     // opening a note cannot tell anyone that it was opened.
     expect(images[1]?.hasAttribute('src')).toBe(false);
+  });
+});
+
+describe('reading a document that is longer than its node', () => {
+  const long = `# Title\n\n${'A paragraph.\n\n'.repeat(40)}`;
+
+  /**
+   * What a wheel over this element means to the canvas. `nowheel` is the whole
+   * contract: React Flow looks for it on the way up from the target, and so
+   * does the canvas's own handler, which is what this asks.
+   */
+  const wheelOver = (element: Element) => {
+    const event = new WheelEvent('wheel', { bubbles: true, shiftKey: true, deltaY: 120 });
+    element.dispatchEvent(event);
+    return horizontalWheel(event);
+  };
+
+  it('scrolls under the wheel once the node is selected', async () => {
+    const preview = await render(<MarkdownPreview source={long} scrollable />);
+
+    expect(preview.find('.markdown').classList.contains('scroll')).toBe(true);
+    expect(preview.find('p').closest('.nowheel')).not.toBeNull();
+    expect(wheelOver(preview.find('p'))).toBeNull();
+  });
+
+  it('leaves the wheel to the canvas while the node is not selected', async () => {
+    const preview = await render(<MarkdownPreview source={long} />);
+
+    // Clipped rather than scrolled: the wheel here pans and zooms the canvas,
+    // as it does over anything else that is not the node being read.
+    expect(preview.find('.markdown').classList.contains('scroll')).toBe(false);
+    expect(preview.find('p').closest('.nowheel')).toBeNull();
+    expect(wheelOver(preview.find('p'))).not.toBeNull();
+  });
+
+  it('scrolls a selected file node, rendered or plain', async () => {
+    const note = await render(
+      <MarkdownFileView relativePath="Notes/note.md" active={false} selected />,
+    );
+    await settle();
+    expect(note.find('.markdown').classList.contains('scroll')).toBe(true);
+
+    const text = await render(
+      <MarkdownFileView relativePath="notes.txt" active={false} selected plain />,
+    );
+    await settle();
+    expect(text.find('.plain-text').classList.contains('scroll')).toBe(true);
+  });
+
+  it('clips a file node that is not selected, as before', async () => {
+    const note = await render(
+      <MarkdownFileView relativePath="Notes/note.md" active={false} selected={false} />,
+    );
+    await settle();
+
+    expect(note.find('.markdown').classList.contains('scroll')).toBe(false);
   });
 });
 

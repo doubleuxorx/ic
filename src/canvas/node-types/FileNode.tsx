@@ -56,6 +56,7 @@ const FileNodeComponent = ({ id, data, selected }: NodeProps<FlowNode>) => {
 						relativePath={node.file}
 						subpath={node.subpath}
 						active={interactiveActive}
+						selected={selected === true}
 						plain={kind === "text"}
 					/>
 				);

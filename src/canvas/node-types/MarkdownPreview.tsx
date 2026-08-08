@@ -17,6 +17,8 @@ interface Props {
   source: string;
   /** Workspace-relative directory used to resolve relative image paths. */
   baseDirectory?: string;
+  /** Whether the wheel scrolls the preview instead of moving the canvas. */
+  scrollable?: boolean;
 }
 
 export const openLinkDeliberately = async (url: string): Promise<void> => {
@@ -29,15 +31,17 @@ export const openLinkDeliberately = async (url: string): Promise<void> => {
   }
 };
 
-const MarkdownPreviewComponent = ({ source, baseDirectory = '' }: Props) => {
+const MarkdownPreviewComponent = ({ source, baseDirectory = '', scrollable }: Props) => {
   const html = useMemo(() => renderMarkdown(source, baseDirectory), [source, baseDirectory]);
 
   return (
     <div
-      // No `nowheel`: a preview is only drawn while the node is not the focused
-      // document, and there the wheel belongs to the canvas, which pans and
-      // zooms under the pointer rather than scrolling the node under it.
-      className="markdown"
+      // `nowheel` only once the node is selected, which is the node being read:
+      // there the wheel scrolls the document, so a note longer than its box can
+      // be read without opening it. Over any other node the wheel stays the
+      // canvas's, which pans and zooms under the pointer rather than scrolling
+      // the node under it.
+      className={scrollable ? 'markdown scroll nowheel' : 'markdown'}
       // Sanitized above; raw HTML in the source was never parsed.
       dangerouslySetInnerHTML={{ __html: html }}
       onClickCapture={(event) => {

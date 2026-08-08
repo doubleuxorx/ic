@@ -77,7 +77,7 @@ const TextNodeComponent = ({ id, data, selected }: NodeProps<FlowNode>) => {
               {node.text}
             </div>
           ) : (
-            <MarkdownPreview source={node.text} />
+            <MarkdownPreview source={node.text} scrollable={selected === true} />
           )}
         </div>
       )}

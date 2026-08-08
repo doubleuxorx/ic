@@ -449,13 +449,20 @@ body {
  */
 .markdown {
   padding: 10px 12px;
-  /* Clipped, not scrolled: the wheel over an unfocused node moves the canvas,
-     so a scrollbar here could only ever be dragged, and dragging it would move
-     the node. What does not fit is read by opening the node. */
+  /* Clipped while the node is neither selected nor open: the wheel there moves
+     the canvas, so a scrollbar could only ever be dragged, and dragging it
+     would move the node. */
   overflow: hidden;
   height: 100%;
   line-height: 1.5;
   overflow-wrap: anywhere;
+}
+
+/* Selecting a node is what says it is the one being read, and from then on the
+   wheel over it scrolls it, so what does not fit is reachable without opening
+   the node for editing. */
+.markdown.scroll {
+  overflow: auto;
 }
 
 .markdown > :first-child {
@@ -580,6 +587,11 @@ body {
   overflow-wrap: anywhere;
   display: flex;
   align-items: center;
+}
+
+/* Scrolled once selected, for the same reason as `.markdown.scroll` above. */
+.plain-text.scroll {
+  overflow: auto;
 }
 
 /* A title box is a label, so its text sits in the middle of the box on both
