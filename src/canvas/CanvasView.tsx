@@ -41,6 +41,7 @@ import {
 import { useCanvasStore } from './canvas-store';
 import { edgeTypes, nodeTypes } from './node-types';
 import { membersOf } from './selection';
+import { correctWheel } from './wheel';
 import { MAX_ZOOM, MIN_ZOOM, backgroundGrid } from './zoom';
 
 // Stable identities: React Flow re-registers listeners when these props change,
@@ -79,6 +80,7 @@ export const CanvasView = ({ showMinimap }: { showMinimap: boolean }) => {
 
   const flow = useReactFlow<FlowNode, FlowEdge>();
   const drag = useRef<DragContext | null>(null);
+  const wrapper = useRef<HTMLDivElement | null>(null);
 
   const [nodes, setNodes] = useState<FlowNode[]>([]);
   const [edges, setEdges] = useState<FlowEdge[]>([]);
@@ -282,8 +284,25 @@ export const CanvasView = ({ showMinimap }: { showMinimap: boolean }) => {
     [setViewport],
   );
 
+  // Shift+wheel moves the canvas left and right, where a plain wheel moves it up
+  // and down: the event is caught on the way down and its delta put on the
+  // horizontal axis, so React Flow, further along, pans it sideways rather than
+  // cancelling the gesture. The event is corrected rather than replaced by a
+  // synthetic one, which keeps everything downstream — React Flow, d3-zoom, the
+  // pane — handling the event the engine sent. The listener is native rather
+  // than a React prop because React's own wheel listeners are passive and run in
+  // both phases.
+  useEffect(() => {
+    const element = wrapper.current;
+    if (!element) return undefined;
+    element.addEventListener('wheel', correctWheel, { capture: true });
+    return () =>
+      element.removeEventListener('wheel', correctWheel, { capture: true });
+  }, []);
+
   return (
     <ReactFlow<FlowNode, FlowEdge>
+      ref={wrapper}
       nodes={nodes}
       edges={edges}
       nodeTypes={nodeTypes}

@@ -63,6 +63,7 @@ toolbar.
 | Drag on empty canvas | Rubber-band selection |
 | Middle or right drag | Pan |
 | Scroll | Pan; pinch or `Mod`+scroll zooms |
+| `Shift`+scroll | Pan left and right, whichever axis the platform put the delta on |
 | Approach a node's side | That side's connection dot appears |
 | Drag a dot | Create an edge |
 
