@@ -440,13 +440,18 @@ body {
 
 /* text and markdown */
 
+/*
+ * A preview is what a node looks like, not a document that has the focus: its
+ * words are read here and edited in the editor, which is the one place text is
+ * selectable. Leaving them selectable made the canvas gestures misbehave — a
+ * rubber band drawn across a node highlighted its prose, and the next drag
+ * picked up that highlight instead of the node.
+ */
 .markdown {
   padding: 10px 12px;
   overflow: auto;
   height: 100%;
   line-height: 1.5;
-  user-select: text;
-  -webkit-user-select: text;
   overflow-wrap: anywhere;
 }
 
@@ -512,6 +517,9 @@ body {
 
 .markdown img {
   max-width: 100%;
+  /* An image is part of the node, so a drag that starts on one moves the node
+     rather than tearing the picture out of it. */
+  -webkit-user-drag: none;
 }
 
 /* Task lists. The item keeps its indent but drops the bullet, so the box sits
@@ -559,14 +567,13 @@ body {
   cursor: pointer;
 }
 
+/* Not selectable, for the same reason as `.markdown` above. */
 .plain-text {
   padding: 10px 12px;
   height: 100%;
   overflow: auto;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  user-select: text;
-  -webkit-user-select: text;
   display: flex;
   align-items: center;
 }
