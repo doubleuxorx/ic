@@ -27,6 +27,9 @@ vi.mock('@/shared/ipc-types', async () => {
 const chooseInDialog = vi.fn<() => Promise<string | null>>();
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: () => chooseInDialog() }));
 
+const closeWindow = vi.fn<() => Promise<void>>();
+vi.mock('@tauri-apps/api/window', () => ({ getCurrentWindow: () => ({ close: closeWindow }) }));
+
 import { useUiStore, type InfoRow } from '@/app/ui-store';
 import { appCommands, registerAppCommands } from '@/app/commands';
 import { useDebugStore } from '@/app/debug-store';
@@ -234,6 +237,16 @@ covers('canvas.saveAll', async () => {
   // Both kinds of document reach disk, not just the canvas.
   expect(backend.contents('Notes/note.md')).toBe('# Edited\n');
   expect(useUiStore.getState().toasts.at(-1)?.message).toBe('Saved');
+});
+
+covers('app.quit', async () => {
+  closeWindow.mockClear();
+
+  await run('app.quit');
+
+  // Quitting asks the window to close; the shell's close handler is what saves,
+  // so this must not become a second, divergent way out of the application.
+  expect(closeWindow).toHaveBeenCalledTimes(1);
 });
 
 /* ------------------------------------------------------------------------ add */

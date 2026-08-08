@@ -7,6 +7,7 @@
  */
 
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 
 import { DEFAULT_SIZES } from '@/canvas/canvas-adapter';
 import { useCanvasStore } from '@/canvas/canvas-store';
@@ -18,7 +19,7 @@ import { useMediaStore, type FitMode } from '@/media/media-view-store';
 import { useDocumentStore } from '@/editor/document-store';
 import { versionLabel } from '@/shared/build-info';
 import { errorMessage } from '@/shared/errors';
-import { ipc } from '@/shared/ipc-types';
+import { ipc, isDesktop } from '@/shared/ipc-types';
 import {
   MAX_CONTENT_SCALE,
   MIN_CONTENT_SCALE,
@@ -254,6 +255,20 @@ const commands: AppCommand[] = [
       await canvas().save({ force: true });
       await useDocumentStore.getState().saveAll();
       toast('Saved');
+    },
+  },
+  {
+    id: 'app.quit',
+    title: 'Quit',
+    category: 'Workspace',
+    defaultShortcut: 'Mod+Q',
+    aliases: ['exit', 'close window'],
+    isAvailable: isDesktop,
+    execute: async () => {
+      // Asking the window to close rather than exiting the process: the shell
+      // answers a close request by flushing pending writes and then destroying
+      // the window, so quitting saves by the same path as the close button.
+      await getCurrentWindow().close();
     },
   },
 

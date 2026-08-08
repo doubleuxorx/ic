@@ -50,6 +50,7 @@ const EDITOR_SAFE_COMMANDS = new Set([
 	"canvas.saveAll",
 	"view.toggleFullscreen",
 	"palette.open",
+	"app.quit",
 ]);
 
 /** The configurable alternative to the palette's default shortcut. */
