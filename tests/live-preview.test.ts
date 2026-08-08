@@ -76,6 +76,12 @@ describe('live preview markup', () => {
     expect(classesIn(doc, AWAY(doc)).filter((name) => name === 'cm-md-list-mark')).toHaveLength(2);
   });
 
+  it('keeps task markers visible, styled only', () => {
+    const doc = '- [ ] one\n- [x] two\n\n';
+    expect(hiddenIn(doc, AWAY(doc))).toEqual([]);
+    expect(classesIn(doc, AWAY(doc)).filter((name) => name === 'cm-md-task-mark')).toHaveLength(2);
+  });
+
   it('marks exactly the revealed lines as source', () => {
     const doc = '# Title\n\n**bold** here\n';
     const sourceLines = (cursor: number): number[] =>

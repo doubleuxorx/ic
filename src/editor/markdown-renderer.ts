@@ -11,7 +11,7 @@
  * touches the network.
  */
 
-import MarkdownIt from 'markdown-it';
+import MarkdownIt, { type StateCore } from 'markdown-it';
 import DOMPurify from 'dompurify';
 
 import { fileUrl } from '@/workspace/workspace-store';
@@ -22,6 +22,55 @@ const md = new MarkdownIt({
   breaks: false,
   typographer: false,
 });
+
+/** A `[ ]` or `[x]` opening a list item, up to the space that follows it. */
+const TASK_MARKER = /^\[([ xX])\](?=$|\s)/;
+
+/**
+ * Task lists: `- [ ]` and `- [x]`.
+ *
+ * markdown-it leaves the brackets as ordinary text, so the marker is lifted out
+ * of the item's first paragraph and replaced by a token drawn as a box. It is
+ * drawn rather than an `<input type="checkbox">` because form controls do not
+ * survive sanitizing, and the preview is read-only in any case: a note's boxes
+ * are ticked by editing the note.
+ */
+const taskLists = (state: StateCore): void => {
+  const { tokens } = state;
+  for (let index = 2; index < tokens.length; index += 1) {
+    // Only the paragraph a list item opens with carries a marker; brackets
+    // anywhere else in the item are ordinary text.
+    const inline = tokens[index];
+    if (inline?.type !== 'inline') continue;
+    if (tokens[index - 1]?.type !== 'paragraph_open') continue;
+    const item = tokens[index - 2];
+    if (item?.type !== 'list_item_open') continue;
+
+    // A first child that is not text means the brackets were parsed as
+    // something else — a reference link, say — and are not a task marker.
+    const first = inline.children?.[0];
+    if (first?.type !== 'text') continue;
+    const match = TASK_MARKER.exec(first.content);
+    if (!match) continue;
+
+    const strip = (text: string): string => text.slice(match[0].length).replace(/^[ \t]+/, '');
+    first.content = strip(first.content);
+    inline.content = strip(inline.content);
+
+    const box = new state.Token('task_checkbox', '', 0);
+    box.meta = { checked: match[1] !== ' ' };
+    inline.children?.unshift(box);
+    item.attrJoin('class', 'task-item');
+  }
+};
+
+md.core.ruler.after('inline', 'task_lists', taskLists);
+
+md.renderer.rules.task_checkbox = (tokens, index) => {
+  const checked = (tokens[index]?.meta as { checked?: boolean } | undefined)?.checked === true;
+  const classes = checked ? 'task-box checked' : 'task-box';
+  return `<span class="${classes}" role="checkbox" aria-checked="${checked}" aria-disabled="true"></span>`;
+};
 
 const ALLOWED_LINK_SCHEMES = ['http://', 'https://', 'mailto:'];
 
@@ -89,7 +138,10 @@ const PURIFY_CONFIG = {
     'table', 'thead', 'tbody', 'tr', 'th', 'td',
     'span', 'div', 'sup', 'sub',
   ],
-  ALLOWED_ATTR: ['src', 'alt', 'title', 'href', 'class', 'align', 'colspan', 'rowspan'],
+  // `role` is here for the task list boxes, which have no text of their own to
+  // announce. It carries no behaviour, and raw HTML never reaches the parser,
+  // so the only roles that can appear are the ones the renderer writes.
+  ALLOWED_ATTR: ['src', 'alt', 'title', 'href', 'class', 'align', 'colspan', 'rowspan', 'role'],
   ALLOW_DATA_ATTR: false,
   FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'button', 'svg', 'math'],
   FORBID_ATTR: ['style', 'srcset', 'formaction', 'ping'],

@@ -514,6 +514,44 @@ body {
   max-width: 100%;
 }
 
+/* Task lists. The item keeps its indent but drops the bullet, so the box sits
+   where the bullet was. */
+.markdown li.task-item {
+  list-style: none;
+}
+
+.markdown .task-box {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 0.85em;
+  height: 0.85em;
+  margin-left: -1.4em;
+  margin-right: 0.55em;
+  vertical-align: -0.05em;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  position: relative;
+}
+
+.markdown .task-box.checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* The tick is two borders of a rotated box: no glyph, so it keeps its shape at
+   any font and any zoom. */
+.markdown .task-box.checked::after {
+  content: '';
+  position: absolute;
+  left: 0.25em;
+  top: 0.05em;
+  width: 0.22em;
+  height: 0.44em;
+  border: solid var(--accent-contrast);
+  border-width: 0 0.11em 0.11em 0;
+  transform: rotate(45deg);
+}
+
 /* Links are inert until deliberately activated. */
 .markdown .md-link {
   color: var(--accent);
@@ -694,6 +732,11 @@ body {
 .cm-editor .cm-md-list-mark,
 .cm-editor .cm-md-hr {
   color: var(--text-muted);
+}
+
+.cm-editor .cm-md-task-mark {
+  font-family: var(--font-mono);
+  color: var(--accent);
 }
 
 .cm-editor .cm-md-quote {

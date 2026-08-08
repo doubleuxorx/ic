@@ -209,6 +209,13 @@ export const markupFor = (
             markup.spans.push({ from: node.from, to: node.to, className: 'cm-md-list-mark' });
             return false;
 
+          case 'TaskMarker':
+            // `[ ]` and `[x]` are marked, not hidden: replacing them with a box
+            // is the kind of rendered output this extension stays away from,
+            // and a hidden marker would leave a task looking like plain prose.
+            markup.spans.push({ from: node.from, to: node.to, className: 'cm-md-task-mark' });
+            return false;
+
           case 'HorizontalRule':
             markup.spans.push({ from: node.from, to: node.to, className: 'cm-md-hr' });
             return false;

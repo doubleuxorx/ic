@@ -77,6 +77,53 @@ describe('markdown rendering', () => {
     expect(remote.querySelector('img')?.hasAttribute('src')).toBe(false);
   });
 
+  it('renders task list items as boxes, ticked or not', () => {
+    const host = parse('- [ ] open\n- [x] done\n- [X] also done\n- plain');
+    const items = [...host.querySelectorAll('li')];
+    expect(items).toHaveLength(4);
+
+    expect(items.map((item) => item.querySelector('.task-box')?.className)).toEqual([
+      'task-box',
+      'task-box checked',
+      'task-box checked',
+      undefined,
+    ]);
+    expect(items.map((item) => item.className)).toEqual([
+      'task-item',
+      'task-item',
+      'task-item',
+      '',
+    ]);
+    // The marker is consumed, not left in the text beside the box.
+    expect(items.map((item) => item.textContent?.trim())).toEqual([
+      'open',
+      'done',
+      'also done',
+      'plain',
+    ]);
+    expect(items[0]?.querySelector('.task-box')?.getAttribute('aria-checked')).toBe('false');
+    expect(items[1]?.querySelector('.task-box')?.getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('renders task items with inline markup and an empty one', () => {
+    const host = parse('- [ ] **bold** and [a link](https://example.org)\n- [x]\n- [y] not a task');
+    const items = [...host.querySelectorAll('li')];
+    expect(items[0]?.querySelector('strong')?.textContent).toBe('bold');
+    expect(items[0]?.querySelector('.md-link')?.textContent).toBe('a link');
+    expect(items[1]?.querySelector('.task-box')?.className).toBe('task-box checked');
+    expect(items[1]?.textContent?.trim()).toBe('');
+    // Only `[ ]`, `[x]` and `[X]` are markers; anything else stays text.
+    expect(items[2]?.querySelector('.task-box')).toBeNull();
+    expect(items[2]?.textContent?.trim()).toBe('[y] not a task');
+  });
+
+  it('takes a task marker only at the start of a list item', () => {
+    const host = parse('- text [ ] more\n\nA paragraph [x] with brackets.');
+    expect(host.querySelectorAll('.task-box')).toHaveLength(0);
+    expect(host.querySelector('li')?.textContent).toBe('text [ ] more');
+    expect(host.querySelector('p')?.textContent).toBe('A paragraph [x] with brackets.');
+  });
+
   it('extracts heading sections named by a subpath', () => {
     const note = '# One\ntext one\n\n## Two\ntext two\n\n# Three\ntext three';
     expect(sliceSubpath(note, '#Two')).toBe('## Two\ntext two\n');
