@@ -14,6 +14,7 @@ import {
   ConnectionMode,
   MiniMap,
   ReactFlow,
+  SelectionMode,
   applyEdgeChanges,
   applyNodeChanges,
   useReactFlow,
@@ -308,6 +309,9 @@ export const CanvasView = ({ showMinimap }: { showMinimap: boolean }) => {
       selectionKeyCode="Shift"
       panOnDrag={PAN_BUTTONS}
       selectionOnDrag
+      // Touching a node is enough to select it: nodes here are large enough that
+      // requiring one to be enclosed would mean zooming out before every gesture.
+      selectionMode={SelectionMode.Partial}
       panOnScroll
       zoomOnPinch
       // A double click is how a node is opened for editing, so it must not also
