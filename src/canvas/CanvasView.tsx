@@ -310,6 +310,10 @@ export const CanvasView = ({ showMinimap }: { showMinimap: boolean }) => {
       selectionOnDrag
       panOnScroll
       zoomOnPinch
+      // A double click is how a node is opened for editing, so it must not also
+      // change the zoom — including on the pane, where a double click that
+      // missed a node would otherwise jump the viewport.
+      zoomOnDoubleClick={false}
       minZoom={MIN_ZOOM}
       maxZoom={MAX_ZOOM}
       onlyRenderVisibleElements
