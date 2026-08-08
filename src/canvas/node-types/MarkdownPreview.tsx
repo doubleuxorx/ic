@@ -34,7 +34,10 @@ const MarkdownPreviewComponent = ({ source, baseDirectory = '' }: Props) => {
 
   return (
     <div
-      className="markdown nowheel"
+      // No `nowheel`: a preview is only drawn while the node is not the focused
+      // document, and there the wheel belongs to the canvas, which pans and
+      // zooms under the pointer rather than scrolling the node under it.
+      className="markdown"
       // Sanitized above; raw HTML in the source was never parsed.
       dangerouslySetInnerHTML={{ __html: html }}
       onClickCapture={(event) => {

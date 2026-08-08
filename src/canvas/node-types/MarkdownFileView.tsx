@@ -87,7 +87,7 @@ const MarkdownFileViewComponent = ({ relativePath, subpath, active, plain }: Pro
   const visible = sliceSubpath(doc.contents, subpath);
 
   return plain ? (
-    <div className="plain-text nowheel" style={{ alignItems: 'flex-start' }}>
+    <div className="plain-text" style={{ alignItems: 'flex-start' }}>
       {visible}
     </div>
   ) : (

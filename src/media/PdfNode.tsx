@@ -274,7 +274,12 @@ const PdfNodeComponent = ({ relativePath, active, width, height, scale }: Props)
 
   return (
     <>
-      <div className="node-body scroll nowheel" style={{ height: '100%', padding: 8 }}>
+      {/* The page scrolls under the wheel only once the node is the focused
+          document; before that the wheel is the canvas's, as on any other node. */}
+      <div
+        className={`node-body scroll ${active ? 'nowheel' : ''}`}
+        style={{ height: '100%', padding: 8 }}
+      >
         <canvas className="pdf-canvas" ref={canvas} />
       </div>
       {active && pageCount > 0 ? (

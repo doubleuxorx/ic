@@ -449,7 +449,10 @@ body {
  */
 .markdown {
   padding: 10px 12px;
-  overflow: auto;
+  /* Clipped, not scrolled: the wheel over an unfocused node moves the canvas,
+     so a scrollbar here could only ever be dragged, and dragging it would move
+     the node. What does not fit is read by opening the node. */
+  overflow: hidden;
   height: 100%;
   line-height: 1.5;
   overflow-wrap: anywhere;
@@ -571,7 +574,8 @@ body {
 .plain-text {
   padding: 10px 12px;
   height: 100%;
-  overflow: auto;
+  /* Clipped, for the same reason as `.markdown` above. */
+  overflow: hidden;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   display: flex;
